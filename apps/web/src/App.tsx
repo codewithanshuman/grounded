@@ -211,7 +211,10 @@ export default function App() {
         </aside>
 
         <section className="lab-content">
-          <div className="field-banner" style={{ backgroundImage: `url(${activeArtwork.url})`, backgroundPosition: activeArtwork.position }}>
+          <div className="field-banner">
+            <div className="hero-artwork" aria-hidden="true" style={{ backgroundImage: `url(${activeArtwork.url})`, backgroundPosition: activeArtwork.position }}>
+              <div className="hero-artwork-caption"><span>ILLUSTRATIVE FIELD ARTWORK</span><b>{workspaces.find((item) => item.id === activeView)?.index} / 06</b></div>
+            </div>
             <div className="hero-grid" aria-hidden="true" />
             <div className="field-banner-copy">
               <div className="hero-kicker"><i /> GROUNDED FIELD LAB <span>/</span> {environmentLabel.toUpperCase()}</div>

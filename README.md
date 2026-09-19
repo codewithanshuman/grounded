@@ -5,9 +5,7 @@ the real emergency arrives.** It models a solar, battery, grid, hospital,
 homes, and EV microgrid; finds the exact chain that causes critical failure;
 and searches for a low-disruption intervention that survives the same future.
 
-Public verified demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
-
-Vercel production mirror: https://grounded-peach.vercel.app
+Public verified demo: https://grounded-peach.vercel.app
 
 Source: https://github.com/anshumanbahekar/grounded
 

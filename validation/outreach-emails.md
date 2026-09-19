@@ -37,7 +37,7 @@ Respectfully,
 [TEAM MEMBER NAME]  
 Grounded project team  
 [PHONE] · [EMAIL]  
-Live demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
+Live demo: https://grounded-peach.vercel.app
 
 ## 2. Aavas Foundation / CSR team
 
@@ -71,7 +71,7 @@ Thank you,
 [TEAM MEMBER NAME]  
 Grounded project team  
 [PHONE] · [EMAIL]  
-Live demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
+Live demo: https://grounded-peach.vercel.app
 
 ## 3. Gram Bharati Samiti
 
@@ -105,4 +105,4 @@ Warm regards,
 [TEAM MEMBER NAME]  
 Grounded project team  
 [PHONE] · [EMAIL]  
-Live demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
+Live demo: https://grounded-peach.vercel.app

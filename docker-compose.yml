@@ -1,0 +1,16 @@
+services:
+  grounded:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      PORT: "8787"
+      VERDANT_DB_PATH: /data/grounded.db
+      SITE_PROFILE_DIR: /data/site-profiles
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    volumes:
+      - grounded-data:/data
+    restart: unless-stopped
+
+volumes:
+  grounded-data:

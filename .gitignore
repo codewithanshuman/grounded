@@ -1,0 +1,13 @@
+node_modules
+dist
+.turbo
+*.db
+*.log
+.DS_Store
+.tmp-site-data/
+test-results/
+playwright-report/
+.codex-artifacts/
+.codex-hosting/
+.chart-data-*/
+submission/*.validation.json

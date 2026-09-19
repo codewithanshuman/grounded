@@ -1,0 +1,742 @@
+{
+  "jaipur": {
+    "source": "NASA_POWER",
+    "status": "live",
+    "period": "NASA POWER climatology + 2023 daily backtest",
+    "latitude": 26.9124,
+    "longitude": 75.7873,
+    "meanTempC": 25.58,
+    "maxTempC": 46.92,
+    "solarKWhM2Day": 5.4355,
+    "cloudPct": 38.94,
+    "fingerprint": "26619F49441D26D9",
+    "fetchedAt": 1789402890451,
+    "monthly": [
+      {
+        "month": "JAN",
+        "meanTempC": 14.51,
+        "maxTempC": 31.13,
+        "solarKWhM2Day": 4.0332,
+        "cloudPct": 23.09
+      },
+      {
+        "month": "FEB",
+        "meanTempC": 18.04,
+        "maxTempC": 35.36,
+        "solarKWhM2Day": 5.1002,
+        "cloudPct": 21.66
+      },
+      {
+        "month": "MAR",
+        "meanTempC": 23.9,
+        "maxTempC": 40.84,
+        "solarKWhM2Day": 6.1853,
+        "cloudPct": 35.33
+      },
+      {
+        "month": "APR",
+        "meanTempC": 30.1,
+        "maxTempC": 44.49,
+        "solarKWhM2Day": 7.009,
+        "cloudPct": 36.75
+      },
+      {
+        "month": "MAY",
+        "meanTempC": 34.21,
+        "maxTempC": 46.64,
+        "solarKWhM2Day": 7.1974,
+        "cloudPct": 38.55
+      },
+      {
+        "month": "JUN",
+        "meanTempC": 34.57,
+        "maxTempC": 46.92,
+        "solarKWhM2Day": 6.5304,
+        "cloudPct": 51.88
+      },
+      {
+        "month": "JUL",
+        "meanTempC": 31.17,
+        "maxTempC": 45.9,
+        "solarKWhM2Day": 5.3146,
+        "cloudPct": 73.94
+      },
+      {
+        "month": "AUG",
+        "meanTempC": 28.83,
+        "maxTempC": 41.82,
+        "solarKWhM2Day": 4.9838,
+        "cloudPct": 71.68
+      },
+      {
+        "month": "SEP",
+        "meanTempC": 28.08,
+        "maxTempC": 41.66,
+        "solarKWhM2Day": 5.5075,
+        "cloudPct": 47.21
+      },
+      {
+        "month": "OCT",
+        "meanTempC": 25.79,
+        "maxTempC": 39.85,
+        "solarKWhM2Day": 5.3098,
+        "cloudPct": 24.07
+      },
+      {
+        "month": "NOV",
+        "meanTempC": 21.09,
+        "maxTempC": 37.28,
+        "solarKWhM2Day": 4.2439,
+        "cloudPct": 20.95
+      },
+      {
+        "month": "DEC",
+        "meanTempC": 16.33,
+        "maxTempC": 31.97,
+        "solarKWhM2Day": 3.8292,
+        "cloudPct": 20.78
+      }
+    ],
+    "historicalDays": [
+      {
+        "date": "20230514",
+        "meanTempC": 34.19,
+        "maxTempC": 41.85,
+        "solarKWhM2Day": 5.1679,
+        "cloudPct": 85.59
+      },
+      {
+        "date": "20230618",
+        "meanTempC": 29.15,
+        "maxTempC": 32.8,
+        "solarKWhM2Day": 1.5511,
+        "cloudPct": 96.83
+      },
+      {
+        "date": "20230912",
+        "meanTempC": 30.44,
+        "maxTempC": 37.18,
+        "solarKWhM2Day": 3.9125,
+        "cloudPct": 82.56
+      },
+      {
+        "date": "20230704",
+        "meanTempC": 32.86,
+        "maxTempC": 39.22,
+        "solarKWhM2Day": 5.8774,
+        "cloudPct": 95.42
+      },
+      {
+        "date": "20230707",
+        "meanTempC": 28.64,
+        "maxTempC": 33.1,
+        "solarKWhM2Day": 2.6105,
+        "cloudPct": 97.75
+      },
+      {
+        "date": "20230513",
+        "meanTempC": 35.23,
+        "maxTempC": 44.22,
+        "solarKWhM2Day": 7.3877,
+        "cloudPct": 64.63
+      },
+      {
+        "date": "20230629",
+        "meanTempC": 30.09,
+        "maxTempC": 34.75,
+        "solarKWhM2Day": 3.6794,
+        "cloudPct": 97.44
+      },
+      {
+        "date": "20230520",
+        "meanTempC": 34.39,
+        "maxTempC": 42.27,
+        "solarKWhM2Day": 6.7243,
+        "cloudPct": 68.67
+      },
+      {
+        "date": "20230521",
+        "meanTempC": 35.4,
+        "maxTempC": 43.47,
+        "solarKWhM2Day": 7.1616,
+        "cloudPct": 62.33
+      },
+      {
+        "date": "20230623",
+        "meanTempC": 32.4,
+        "maxTempC": 38.68,
+        "solarKWhM2Day": 5.2925,
+        "cloudPct": 77.46
+      },
+      {
+        "date": "20230524",
+        "meanTempC": 33.12,
+        "maxTempC": 38.17,
+        "solarKWhM2Day": 4.6658,
+        "cloudPct": 67.31
+      },
+      {
+        "date": "20230821",
+        "meanTempC": 30.58,
+        "maxTempC": 35.32,
+        "solarKWhM2Day": 4.3697,
+        "cloudPct": 91.75
+      }
+    ]
+  },
+  "phoenix": {
+    "source": "NASA_POWER",
+    "status": "live",
+    "period": "NASA POWER climatology + 2023 daily backtest",
+    "latitude": 33.4484,
+    "longitude": -112.074,
+    "meanTempC": 22.35,
+    "maxTempC": 48.57,
+    "solarKWhM2Day": 5.8476,
+    "cloudPct": 32.07,
+    "fingerprint": "2B258D37540BE016",
+    "fetchedAt": 1789402891868,
+    "monthly": [
+      {
+        "month": "JAN",
+        "meanTempC": 11.41,
+        "maxTempC": 30.03,
+        "solarKWhM2Day": 3.432,
+        "cloudPct": 39.68
+      },
+      {
+        "month": "FEB",
+        "meanTempC": 12.87,
+        "maxTempC": 29.95,
+        "solarKWhM2Day": 4.4314,
+        "cloudPct": 40.27
+      },
+      {
+        "month": "MAR",
+        "meanTempC": 16.84,
+        "maxTempC": 36.99,
+        "solarKWhM2Day": 5.8872,
+        "cloudPct": 34.48
+      },
+      {
+        "month": "APR",
+        "meanTempC": 20.61,
+        "maxTempC": 39.92,
+        "solarKWhM2Day": 7.2782,
+        "cloudPct": 27.64
+      },
+      {
+        "month": "MAY",
+        "meanTempC": 25.92,
+        "maxTempC": 44.16,
+        "solarKWhM2Day": 8.1689,
+        "cloudPct": 22.41
+      },
+      {
+        "month": "JUN",
+        "meanTempC": 31.96,
+        "maxTempC": 48.57,
+        "solarKWhM2Day": 8.4958,
+        "cloudPct": 17.46
+      },
+      {
+        "month": "JUL",
+        "meanTempC": 33.91,
+        "maxTempC": 47.43,
+        "solarKWhM2Day": 7.4866,
+        "cloudPct": 42.72
+      },
+      {
+        "month": "AUG",
+        "meanTempC": 32.96,
+        "maxTempC": 46.58,
+        "solarKWhM2Day": 6.9103,
+        "cloudPct": 38.38
+      },
+      {
+        "month": "SEP",
+        "meanTempC": 29.97,
+        "maxTempC": 45.82,
+        "solarKWhM2Day": 6.1613,
+        "cloudPct": 24.54
+      },
+      {
+        "month": "OCT",
+        "meanTempC": 23.42,
+        "maxTempC": 40.99,
+        "solarKWhM2Day": 5.0069,
+        "cloudPct": 23.66
+      },
+      {
+        "month": "NOV",
+        "meanTempC": 16.82,
+        "maxTempC": 36.35,
+        "solarKWhM2Day": 3.78,
+        "cloudPct": 32.04
+      },
+      {
+        "month": "DEC",
+        "meanTempC": 10.98,
+        "maxTempC": 28.39,
+        "solarKWhM2Day": 3.0816,
+        "cloudPct": 41.48
+      }
+    ],
+    "historicalDays": [
+      {
+        "date": "20230820",
+        "meanTempC": 31.16,
+        "maxTempC": 37.58,
+        "solarKWhM2Day": 2.6479,
+        "cloudPct": 98.45
+      },
+      {
+        "date": "20230730",
+        "meanTempC": 36.2,
+        "maxTempC": 43.16,
+        "solarKWhM2Day": 5.503,
+        "cloudPct": 83.84
+      },
+      {
+        "date": "20230910",
+        "meanTempC": 34.66,
+        "maxTempC": 41.45,
+        "solarKWhM2Day": 4.835,
+        "cloudPct": 80.45
+      },
+      {
+        "date": "20230814",
+        "meanTempC": 35.11,
+        "maxTempC": 42.33,
+        "solarKWhM2Day": 4.9135,
+        "cloudPct": 69.38
+      },
+      {
+        "date": "20230817",
+        "meanTempC": 37.24,
+        "maxTempC": 44.47,
+        "solarKWhM2Day": 6.3929,
+        "cloudPct": 69.87
+      },
+      {
+        "date": "20230819",
+        "meanTempC": 31,
+        "maxTempC": 36.11,
+        "solarKWhM2Day": 3.1255,
+        "cloudPct": 99.17
+      },
+      {
+        "date": "20230818",
+        "meanTempC": 34.69,
+        "maxTempC": 41.35,
+        "solarKWhM2Day": 5.7566,
+        "cloudPct": 88.03
+      },
+      {
+        "date": "20230729",
+        "meanTempC": 36.69,
+        "maxTempC": 44.99,
+        "solarKWhM2Day": 6.9355,
+        "cloudPct": 68.53
+      },
+      {
+        "date": "20230723",
+        "meanTempC": 36.88,
+        "maxTempC": 43.92,
+        "solarKWhM2Day": 7.1095,
+        "cloudPct": 84.04
+      },
+      {
+        "date": "20230726",
+        "meanTempC": 38.95,
+        "maxTempC": 47.49,
+        "solarKWhM2Day": 7.7669,
+        "cloudPct": 47.2
+      },
+      {
+        "date": "20230821",
+        "meanTempC": 29.34,
+        "maxTempC": 34.88,
+        "solarKWhM2Day": 3.0122,
+        "cloudPct": 96.46
+      },
+      {
+        "date": "20230816",
+        "meanTempC": 37.08,
+        "maxTempC": 44.56,
+        "solarKWhM2Day": 6.6101,
+        "cloudPct": 54.96
+      }
+    ]
+  },
+  "miami": {
+    "source": "NASA_POWER",
+    "status": "live",
+    "period": "NASA POWER climatology + 2023 daily backtest",
+    "latitude": 25.7617,
+    "longitude": -80.1918,
+    "meanTempC": 25.46,
+    "maxTempC": 31.9,
+    "solarKWhM2Day": 5.0112,
+    "cloudPct": 55.45,
+    "fingerprint": "758182496A772445",
+    "fetchedAt": 1789402892838,
+    "monthly": [
+      {
+        "month": "JAN",
+        "meanTempC": 21.2,
+        "maxTempC": 26.91,
+        "solarKWhM2Day": 3.6905,
+        "cloudPct": 54.71
+      },
+      {
+        "month": "FEB",
+        "meanTempC": 22.13,
+        "maxTempC": 27.42,
+        "solarKWhM2Day": 4.4554,
+        "cloudPct": 49.6
+      },
+      {
+        "month": "MAR",
+        "meanTempC": 23.01,
+        "maxTempC": 29.22,
+        "solarKWhM2Day": 5.5298,
+        "cloudPct": 47.44
+      },
+      {
+        "month": "APR",
+        "meanTempC": 24.68,
+        "maxTempC": 31.43,
+        "solarKWhM2Day": 6.2052,
+        "cloudPct": 48.51
+      },
+      {
+        "month": "MAY",
+        "meanTempC": 26.26,
+        "maxTempC": 31.86,
+        "solarKWhM2Day": 6.2453,
+        "cloudPct": 54.54
+      },
+      {
+        "month": "JUN",
+        "meanTempC": 27.97,
+        "maxTempC": 31.7,
+        "solarKWhM2Day": 5.683,
+        "cloudPct": 68.97
+      },
+      {
+        "month": "JUL",
+        "meanTempC": 28.74,
+        "maxTempC": 31.9,
+        "solarKWhM2Day": 5.8783,
+        "cloudPct": 62.08
+      },
+      {
+        "month": "AUG",
+        "meanTempC": 29.02,
+        "maxTempC": 31.72,
+        "solarKWhM2Day": 5.6398,
+        "cloudPct": 62.42
+      },
+      {
+        "month": "SEP",
+        "meanTempC": 28.31,
+        "maxTempC": 31.53,
+        "solarKWhM2Day": 4.9591,
+        "cloudPct": 64.82
+      },
+      {
+        "month": "OCT",
+        "meanTempC": 26.89,
+        "maxTempC": 30.76,
+        "solarKWhM2Day": 4.4998,
+        "cloudPct": 53.25
+      },
+      {
+        "month": "NOV",
+        "meanTempC": 24.39,
+        "maxTempC": 29.4,
+        "solarKWhM2Day": 3.8762,
+        "cloudPct": 45.88
+      },
+      {
+        "month": "DEC",
+        "meanTempC": 22.78,
+        "maxTempC": 27.81,
+        "solarKWhM2Day": 3.445,
+        "cloudPct": 52.89
+      }
+    ],
+    "historicalDays": [
+      {
+        "date": "20230726",
+        "meanTempC": 29.57,
+        "maxTempC": 30.27,
+        "solarKWhM2Day": 2.1144,
+        "cloudPct": 99.14
+      },
+      {
+        "date": "20230728",
+        "meanTempC": 29.74,
+        "maxTempC": 30.15,
+        "solarKWhM2Day": 2.4158,
+        "cloudPct": 99.13
+      },
+      {
+        "date": "20231115",
+        "meanTempC": 25.06,
+        "maxTempC": 26.01,
+        "solarKWhM2Day": 0.523,
+        "cloudPct": 99.88
+      },
+      {
+        "date": "20230820",
+        "meanTempC": 29.77,
+        "maxTempC": 30.58,
+        "solarKWhM2Day": 2.9182,
+        "cloudPct": 88.97
+      },
+      {
+        "date": "20230618",
+        "meanTempC": 28.71,
+        "maxTempC": 29.78,
+        "solarKWhM2Day": 3.2268,
+        "cloudPct": 98.95
+      },
+      {
+        "date": "20231216",
+        "meanTempC": 24.13,
+        "maxTempC": 24.56,
+        "solarKWhM2Day": 0.9353,
+        "cloudPct": 99.86
+      },
+      {
+        "date": "20230926",
+        "meanTempC": 29.31,
+        "maxTempC": 30.04,
+        "solarKWhM2Day": 3.8182,
+        "cloudPct": 93.72
+      },
+      {
+        "date": "20231225",
+        "meanTempC": 23.8,
+        "maxTempC": 24.09,
+        "solarKWhM2Day": 0.8095,
+        "cloudPct": 99.43
+      },
+      {
+        "date": "20231213",
+        "meanTempC": 24.2,
+        "maxTempC": 24.33,
+        "solarKWhM2Day": 0.9216,
+        "cloudPct": 98.58
+      },
+      {
+        "date": "20230622",
+        "meanTempC": 28.67,
+        "maxTempC": 29.31,
+        "solarKWhM2Day": 3.4716,
+        "cloudPct": 92.92
+      },
+      {
+        "date": "20231009",
+        "meanTempC": 27.49,
+        "maxTempC": 28.67,
+        "solarKWhM2Day": 2.5889,
+        "cloudPct": 80.51
+      },
+      {
+        "date": "20230930",
+        "meanTempC": 29.23,
+        "maxTempC": 30.39,
+        "solarKWhM2Day": 3.8364,
+        "cloudPct": 86.36
+      }
+    ]
+  },
+  "seattle": {
+    "source": "NASA_POWER",
+    "status": "live",
+    "period": "NASA POWER climatology + 2023 daily backtest",
+    "latitude": 47.6062,
+    "longitude": -122.3321,
+    "meanTempC": 10.51,
+    "maxTempC": 38.03,
+    "solarKWhM2Day": 3.4178,
+    "cloudPct": 68.19,
+    "fingerprint": "21F0B0401EE3E6B9",
+    "fetchedAt": 1789402893381,
+    "monthly": [
+      {
+        "month": "JAN",
+        "meanTempC": 4.38,
+        "maxTempC": 17.52,
+        "solarKWhM2Day": 1.0301,
+        "cloudPct": 80.22
+      },
+      {
+        "month": "FEB",
+        "meanTempC": 4.58,
+        "maxTempC": 17.23,
+        "solarKWhM2Day": 1.9183,
+        "cloudPct": 74.18
+      },
+      {
+        "month": "MAR",
+        "meanTempC": 6.66,
+        "maxTempC": 21.75,
+        "solarKWhM2Day": 2.8483,
+        "cloudPct": 78.66
+      },
+      {
+        "month": "APR",
+        "meanTempC": 9.02,
+        "maxTempC": 30.46,
+        "solarKWhM2Day": 4.1506,
+        "cloudPct": 75.27
+      },
+      {
+        "month": "MAY",
+        "meanTempC": 12.8,
+        "maxTempC": 32.46,
+        "solarKWhM2Day": 5.249,
+        "cloudPct": 70.45
+      },
+      {
+        "month": "JUN",
+        "meanTempC": 15.2,
+        "maxTempC": 33.82,
+        "solarKWhM2Day": 5.7319,
+        "cloudPct": 67.57
+      },
+      {
+        "month": "JUL",
+        "meanTempC": 18.17,
+        "maxTempC": 38.03,
+        "solarKWhM2Day": 6.3346,
+        "cloudPct": 46.54
+      },
+      {
+        "month": "AUG",
+        "meanTempC": 18.27,
+        "maxTempC": 33.04,
+        "solarKWhM2Day": 5.4036,
+        "cloudPct": 48.1
+      },
+      {
+        "month": "SEP",
+        "meanTempC": 15.4,
+        "maxTempC": 32.73,
+        "solarKWhM2Day": 3.9106,
+        "cloudPct": 53.47
+      },
+      {
+        "month": "OCT",
+        "meanTempC": 10.76,
+        "maxTempC": 26.23,
+        "solarKWhM2Day": 2.2781,
+        "cloudPct": 68.31
+      },
+      {
+        "month": "NOV",
+        "meanTempC": 6.66,
+        "maxTempC": 21.44,
+        "solarKWhM2Day": 1.2168,
+        "cloudPct": 77.15
+      },
+      {
+        "month": "DEC",
+        "meanTempC": 3.83,
+        "maxTempC": 15.45,
+        "solarKWhM2Day": 0.8522,
+        "cloudPct": 78.89
+      }
+    ],
+    "historicalDays": [
+      {
+        "date": "20230805",
+        "meanTempC": 20.39,
+        "maxTempC": 22.8,
+        "solarKWhM2Day": 1.7794,
+        "cloudPct": 99.83
+      },
+      {
+        "date": "20231015",
+        "meanTempC": 15.58,
+        "maxTempC": 21.11,
+        "solarKWhM2Day": 1.1582,
+        "cloudPct": 93.88
+      },
+      {
+        "date": "20230829",
+        "meanTempC": 17.65,
+        "maxTempC": 23.57,
+        "solarKWhM2Day": 2.4946,
+        "cloudPct": 89.93
+      },
+      {
+        "date": "20230828",
+        "meanTempC": 18.21,
+        "maxTempC": 22.84,
+        "solarKWhM2Day": 2.0016,
+        "cloudPct": 87.41
+      },
+      {
+        "date": "20230903",
+        "meanTempC": 17.33,
+        "maxTempC": 22.07,
+        "solarKWhM2Day": 1.9277,
+        "cloudPct": 78.61
+      },
+      {
+        "date": "20230806",
+        "meanTempC": 20.56,
+        "maxTempC": 25.36,
+        "solarKWhM2Day": 4.3985,
+        "cloudPct": 90.19
+      },
+      {
+        "date": "20231013",
+        "meanTempC": 14.05,
+        "maxTempC": 21.08,
+        "solarKWhM2Day": 2.2006,
+        "cloudPct": 82.5
+      },
+      {
+        "date": "20230912",
+        "meanTempC": 16.54,
+        "maxTempC": 20.86,
+        "solarKWhM2Day": 2.2334,
+        "cloudPct": 81.31
+      },
+      {
+        "date": "20230807",
+        "meanTempC": 20.33,
+        "maxTempC": 25.06,
+        "solarKWhM2Day": 4.6186,
+        "cloudPct": 82.01
+      },
+      {
+        "date": "20230515",
+        "meanTempC": 22.29,
+        "maxTempC": 31.25,
+        "solarKWhM2Day": 6.4181,
+        "cloudPct": 39.37
+      },
+      {
+        "date": "20230911",
+        "meanTempC": 17.46,
+        "maxTempC": 22.13,
+        "solarKWhM2Day": 3.3962,
+        "cloudPct": 84.95
+      },
+      {
+        "date": "20230809",
+        "meanTempC": 19.14,
+        "maxTempC": 24.18,
+        "solarKWhM2Day": 4.3752,
+        "cloudPct": 78.3
+      }
+    ]
+  }
+}

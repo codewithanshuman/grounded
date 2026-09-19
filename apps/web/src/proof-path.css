@@ -1,0 +1,126 @@
+.proof-path {
+  display: grid;
+  grid-template-columns: 178px repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 14px;
+  align-items: stretch;
+}
+
+.proof-path > span {
+  display: flex;
+  min-width: 0;
+  padding: 4px 8px 4px 0;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.proof-path > span small {
+  margin-bottom: 7px;
+  color: var(--clay);
+  font: 500 7px/1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.14em;
+}
+
+.proof-path > span strong {
+  max-width: 150px;
+  color: var(--ink);
+  font: 600 13px/1.25 "Manrope", sans-serif;
+}
+
+.proof-path button {
+  display: grid;
+  min-height: 60px;
+  min-width: 0;
+  padding: 9px;
+  grid-template-columns: 19px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.76);
+  font: 600 9px/1.1 "IBM Plex Mono", monospace;
+  letter-spacing: 0.04em;
+  text-align: left;
+  transition: border-color 160ms ease, color 160ms ease, background 160ms ease;
+}
+
+.proof-path button b {
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #c7d4c1;
+  border-radius: 50%;
+  color: var(--moss-dark);
+  background: #f7faf4;
+  font-size: 7px;
+}
+
+.proof-path button:hover,
+.proof-path button:focus-visible {
+  border-color: var(--moss);
+  color: var(--moss-dark);
+  background: rgba(237, 245, 232, 0.94);
+  outline: none;
+}
+
+.proof-path button > span {
+  display: block;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proof-path button > span small {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: #8c9387;
+  font-size: 6px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proof-path button.active,
+.proof-path button.done {
+  border-color: #a9c2a1;
+  background: linear-gradient(135deg, #f8fbf5, #edf4e9);
+}
+
+.proof-path button.done b {
+  color: #fff;
+  border-color: var(--moss);
+  background: var(--moss);
+}
+
+.proof-path button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+@media (max-width: 720px) {
+  .proof-path {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 3px;
+    scrollbar-width: none;
+  }
+
+  .proof-path > span {
+    flex: 0 0 158px;
+  }
+
+  .proof-path::-webkit-scrollbar {
+    display: none;
+  }
+
+  .proof-path button {
+    flex: 0 0 138px;
+  }
+}

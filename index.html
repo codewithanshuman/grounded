@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Grounded is a climate-resilience digital twin that stress-tests community microgrids across thousands of possible futures.">
+<meta name="theme-color" content="#080A07">
+<title>Grounded — Test tomorrow before it arrives.</title>
+<link rel="preload" as="image" href="assets/hero-field.png">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --ink:    #080A07;
+  --linen:  #F0EBE1;
+  --moss:   #3D6B22;
+  --sage:   #A8BF94;
+  --sky:    #C9DDE8;
+  --stone:  #8A8880;
+  --white:  #FDFCFA;
+}
+html { font-size: 16px; scroll-behavior: smooth; }
+body { font-family: 'DM Sans', sans-serif; background: var(--white); color: var(--ink); overflow-x: hidden; }
+body.modal-open { overflow: hidden; }
+img { display: block; max-width: 100%; }
+button { cursor: pointer; font-family: 'DM Sans', sans-serif; }
+a { text-decoration: none; color: inherit; }
+section[id] { scroll-margin-top: 60px; }
+:disabled { cursor: wait; opacity: .65; }
+:focus-visible { outline: 3px solid var(--sage); outline-offset: 4px; }
+.skip-link { position: fixed; left: 1rem; top: -5rem; z-index: 1000; background: var(--ink); color: var(--white); padding: .75rem 1rem; border-radius: 6px; transition: top .2s; }
+.skip-link:focus { top: 1rem; }
+
+/* ── NAV ────────────────────────────────── */
+.nav {
+  position: fixed; inset-inline: 0; top: 0; z-index: 300;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 2.5rem; height: 60px;
+  mix-blend-mode: normal;
+}
+.nav::before {
+  content: ''; position: absolute; inset: 0;
+  background: rgba(253,252,250,0.88);
+  border-bottom: 1px solid rgba(8,10,7,0.07);
+  backdrop-filter: blur(16px) saturate(1.4);
+  z-index: -1;
+}
+.nav-logo { display: flex; align-items: center; gap: 9px; }
+.nav-logo img { height: 32px; width: 32px; object-fit: contain; }
+.nav-wordmark { font-family: 'DM Serif Display', serif; font-size: 18px; color: var(--ink); letter-spacing: -0.02em; }
+.nav-links { display: flex; gap: 2rem; }
+.nav-links a { font-size: 13px; font-weight: 400; color: var(--stone); letter-spacing: 0.005em; transition: color .18s; }
+.nav-links a:hover { color: var(--ink); }
+.nav-links a.active { color: var(--ink); }
+.nav-end { display: flex; align-items: center; gap: 1rem; }
+.nav-signin { font-size: 13px; color: var(--stone); background: none; border: none; padding: 0; transition: color .18s; }
+.nav-signin:hover { color: var(--ink); }
+.nav-btn {
+  font-size: 13px; font-weight: 500; color: var(--white);
+  background: var(--ink); border: none; border-radius: 5px;
+  padding: 0.45rem 1.1rem; letter-spacing: 0.01em; transition: background .18s;
+}
+.nav-btn:hover { background: var(--moss); }
+.nav-menu { display: none; width: 42px; height: 42px; padding: 0; border: 0; background: transparent; align-items: center; justify-content: center; }
+.nav-menu-lines, .nav-menu-lines::before, .nav-menu-lines::after { display: block; width: 20px; height: 1.5px; background: var(--ink); transition: transform .2s, opacity .2s; }
+.nav-menu-lines { position: relative; }
+.nav-menu-lines::before, .nav-menu-lines::after { content: ''; position: absolute; left: 0; }
+.nav-menu-lines::before { top: -6px; }
+.nav-menu-lines::after { top: 6px; }
+.nav-menu[aria-expanded="true"] .nav-menu-lines { background: transparent; }
+.nav-menu[aria-expanded="true"] .nav-menu-lines::before { top: 0; transform: rotate(45deg); }
+.nav-menu[aria-expanded="true"] .nav-menu-lines::after { top: 0; transform: rotate(-45deg); }
+
+/* ── HERO ────────────────────────────────── */
+.hero {
+  position: relative; width: 100%; height: 100svh; min-height: 600px;
+  display: flex; flex-direction: column; justify-content: flex-end;
+  overflow: hidden;
+}
+.hero-photo {
+  position: absolute; inset: 0; z-index: 0;
+}
+.hero-photo img {
+  width: 100%; height: 100%; object-fit: cover; object-position: center 30%;
+}
+.hero-scrim {
+  position: absolute; inset: 0; z-index: 1;
+  background: linear-gradient(
+    to bottom,
+    rgba(8,10,7,0.08) 0%,
+    rgba(8,10,7,0.10) 40%,
+    rgba(8,10,7,0.62) 78%,
+    rgba(8,10,7,0.82) 100%
+  );
+}
+.hero-body {
+  position: relative; z-index: 2;
+  padding: 0 2.5rem 3.5rem;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 3rem;
+}
+.hero-headline {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(68px, 10vw, 130px);
+  font-weight: 400;
+  color: var(--linen);
+  line-height: 0.94;
+  letter-spacing: -0.03em;
+  animation: heroIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hero-headline em { font-style: italic; color: var(--sage); }
+@keyframes heroIn {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.hero-right {
+  flex-shrink: 0; max-width: 300px;
+  display: flex; flex-direction: column; gap: 1.25rem; align-items: flex-start;
+  padding-bottom: 0.5rem;
+  animation: heroIn 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+.hero-sub {
+  font-size: 14.5px; font-weight: 300; color: rgba(240,235,225,0.75);
+  line-height: 1.7; letter-spacing: 0.005em;
+}
+.hero-cta {
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.btn-primary {
+  font-size: 13.5px; font-weight: 500;
+  background: var(--moss); color: var(--white); border: none;
+  border-radius: 5px; padding: 0.65rem 1.4rem; letter-spacing: 0.01em;
+  transition: background .18s;
+}
+.btn-primary:hover { background: #4f8c2c; }
+.btn-ghost {
+  font-size: 13.5px; font-weight: 400;
+  background: rgba(240,235,225,0.12); color: var(--linen);
+  border: 1px solid rgba(240,235,225,0.28); border-radius: 5px;
+  padding: 0.65rem 1.4rem; letter-spacing: 0.01em;
+  transition: background .18s, border-color .18s;
+}
+.btn-ghost:hover { background: rgba(240,235,225,0.2); border-color: rgba(240,235,225,0.5); }
+.hero-stats {
+  display: flex; gap: 2rem; padding-top: 1.25rem;
+  border-top: 1px solid rgba(240,235,225,0.15);
+}
+.hero-stat-val { font-family: 'DM Serif Display', serif; font-size: 24px; color: var(--linen); line-height: 1; }
+.hero-stat-lbl { font-size: 11px; color: rgba(240,235,225,0.5); margin-top: 5px; letter-spacing: 0.03em; }
+
+/* ── TICKER ────────────────────────────────── */
+.ticker {
+  background: var(--ink); padding: 12px 0; overflow: hidden;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.ticker-track {
+  display: flex; gap: 0;
+  animation: ticker 35s linear infinite;
+  width: max-content;
+}
+.ticker-track:hover { animation-play-state: paused; }
+.ticker-item {
+  font-size: 12.5px; color: rgba(240,235,225,0.45);
+  padding: 0 3rem; white-space: nowrap; letter-spacing: 0.02em;
+}
+.ticker-item b { color: var(--sage); font-weight: 500; }
+.ticker-sep { color: rgba(240,235,225,0.15); padding: 0; }
+@keyframes ticker { to { transform: translateX(-50%); } }
+
+/* ── STATEMENT ────────────────────────────────── */
+.statement {
+  padding: 9rem 2.5rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8rem; align-items: start;
+}
+.statement-left { position: sticky; top: 6rem; }
+.statement-label { font-size: 11px; color: var(--moss); letter-spacing: 0.08em; margin-bottom: 2rem; font-weight: 500; }
+.statement-hed {
+  font-family: 'DM Serif Display', serif;
+  font-size: clamp(36px, 4vw, 56px);
+  line-height: 1.08; letter-spacing: -0.025em; color: var(--ink);
+}
+.statement-hed em { font-style: italic; }
+.statement-right { padding-top: 1rem; }
+.statement-right p {
+  font-size: 17px; font-weight: 300; color: #3A3D37;
+  line-height: 1.85; margin-bottom: 2rem; max-width: 52ch;
+}
+.statement-right p:last-of-type { margin-bottom: 0; }
+
+/* ── PHOTO PAIR ────────────────────────────────── */
+.photo-pair {
+  display: grid; grid-template-columns: 3fr 2fr; gap: 3px;
+  height: 65vh; min-height: 440px; overflow: hidden;
+}
+.photo-pair-main { position: relative; overflow: hidden; }
+.photo-pair-main img { width: 100%; height: 100%; object-fit: cover; transition: transform 8s ease; }
+.photo-pair-main:hover img { transform: scale(1.04); }
+.photo-pair-side { display: flex; flex-direction: column; gap: 3px; }
+.photo-pair-aside { flex: 1; background: var(--ink); display: flex; flex-direction: column; justify-content: flex-end; padding: 2rem; }
+.photo-pair-aside-lbl { font-size: 11px; color: var(--sage); letter-spacing: 0.06em; margin-bottom: 0.75rem; font-weight: 500; }
+.photo-pair-aside-hed { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--linen); line-height: 1.3; }
+.photo-pair-aside2 { flex: 1; background: var(--moss); display: flex; flex-direction: column; justify-content: flex-end; padding: 2rem; }
+.photo-pair-aside2 p { font-size: 13px; font-weight: 300; color: rgba(240,235,225,0.8); line-height: 1.65; }
+.photo-pair-aside2 strong { display: block; font-family: 'DM Serif Display', serif; font-size: 28px; color: var(--linen); margin-bottom: 0.4rem; font-weight: 400; }
+
+/* ── FEATURES ────────────────────────────────── */
+.features-section { padding: 9rem 2.5rem; background: var(--white); }
+.features-top { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5rem; border-bottom: 1px solid rgba(8,10,7,0.08); padding-bottom: 3rem; }
+.features-hed { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 4.5vw, 60px); line-height: 1.06; letter-spacing: -0.025em; max-width: 14ch; }
+.features-hed em { font-style: italic; }
+.features-desc { max-width: 36ch; }
+.features-desc p { font-size: 15px; font-weight: 300; color: #3A3D37; line-height: 1.8; margin-bottom: 1.5rem; }
+.features-rows { display: flex; flex-direction: column; }
+.feat-row {
+  display: grid; grid-template-columns: 2fr 1fr 2fr;
+  border-bottom: 1px solid rgba(8,10,7,0.08); padding: 2.25rem 0;
+  align-items: start; gap: 2rem;
+  transition: background .2s;
+}
+.feat-row:first-child { border-top: 1px solid rgba(8,10,7,0.08); }
+.feat-row:hover { background: var(--linen); margin: 0 -2.5rem; padding-left: 2.5rem; padding-right: 2.5rem; }
+.feat-row-name { font-family: 'DM Serif Display', serif; font-size: 22px; color: var(--ink); line-height: 1.2; }
+.feat-row-tag { font-size: 11px; color: var(--moss); font-weight: 500; letter-spacing: 0.06em; margin-top: 6px; }
+.feat-row-type { font-size: 12px; color: var(--stone); letter-spacing: 0.04em; padding-top: 4px; }
+.feat-row-desc { font-size: 13.5px; font-weight: 300; color: #4A4D47; line-height: 1.7; }
+
+/* ── PROCESS ────────────────────────────────── */
+.process { background: var(--linen); padding: 9rem 2.5rem; }
+.process-hed { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 4vw, 54px); color: var(--ink); line-height: 1.1; letter-spacing: -0.025em; max-width: 14ch; margin-bottom: 5rem; }
+.process-hed em { font-style: italic; }
+.process-steps { display: grid; grid-template-columns: repeat(4, 1fr); border-left: 1px solid rgba(8,10,7,0.1); }
+.process-step { padding: 0 2rem 0 2rem; border-right: 1px solid rgba(8,10,7,0.1); }
+.process-step-n { font-family: 'DM Serif Display', serif; font-size: 11px; color: var(--stone); margin-bottom: 2rem; display: block; letter-spacing: 0.04em; }
+.process-step h4 { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--ink); margin-bottom: 1rem; line-height: 1.2; }
+.process-step p { font-size: 13px; font-weight: 300; color: #4A4D47; line-height: 1.75; }
+
+/* ── FOREST IMMERSIVE ────────────────────────────────── */
+.forest-immersive {
+  position: relative; height: 80vh; min-height: 500px;
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+}
+.forest-immersive img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.forest-scrim {
+  position: absolute; inset: 0;
+  background: rgba(8,10,7,0.52);
+}
+.forest-inner {
+  position: relative; z-index: 2; text-align: center; padding: 2rem;
+  max-width: 760px;
+}
+.forest-quote {
+  font-family: 'DM Serif Display', serif; font-style: italic;
+  font-size: clamp(28px, 4vw, 52px); color: var(--linen);
+  line-height: 1.22; letter-spacing: -0.02em; margin-bottom: 2.5rem;
+}
+.forest-attr { font-size: 12px; color: rgba(240,235,225,0.45); letter-spacing: 0.05em; margin-bottom: 2.5rem; }
+
+/* ── IMPACT ────────────────────────────────── */
+.impact-section { background: var(--ink); padding: 9rem 2.5rem; }
+.impact-top { display: grid; grid-template-columns: 1fr 1fr; gap: 8rem; margin-bottom: 6rem; align-items: end; }
+.impact-hed { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 4vw, 56px); color: var(--linen); line-height: 1.1; letter-spacing: -0.025em; }
+.impact-hed em { font-style: italic; color: var(--sage); }
+.impact-sub { font-size: 14.5px; font-weight: 300; color: rgba(240,235,225,0.55); line-height: 1.8; }
+.impact-nums { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; border-top: 1px solid rgba(240,235,225,0.1); }
+.impact-num { padding: 2.5rem 0 2.5rem; border-right: 1px solid rgba(240,235,225,0.1); padding-right: 2rem; margin-right: 2rem; }
+.impact-num:last-child { border-right: none; }
+.impact-num-val { font-family: 'DM Serif Display', serif; font-size: clamp(42px, 5vw, 64px); color: var(--sage); line-height: 1; letter-spacing: -0.02em; }
+.impact-num-lbl { font-size: 12.5px; color: rgba(240,235,225,0.4); margin-top: 0.75rem; line-height: 1.5; font-weight: 300; }
+.impact-rows { margin-top: 5rem; display: flex; flex-direction: column; border-top: 1px solid rgba(240,235,225,0.1); }
+.impact-row { display: flex; align-items: center; justify-content: space-between; padding: 1.5rem 0; border-bottom: 1px solid rgba(240,235,225,0.07); gap: 2rem; }
+.impact-row-name { font-size: 14px; color: rgba(240,235,225,0.6); font-weight: 300; flex: 1; }
+.impact-row-bar-wrap { flex: 2; height: 2px; background: rgba(240,235,225,0.08); border-radius: 1px; overflow: hidden; }
+.impact-row-bar { height: 100%; background: var(--moss); border-radius: 1px; }
+.impact-row-val { font-family: 'DM Serif Display', serif; font-size: 20px; color: var(--sage); flex-shrink: 0; min-width: 60px; text-align: right; }
+
+/* ── PULL QUOTE ────────────────────────────────── */
+.pullquote { padding: 9rem 2.5rem; background: var(--white); }
+.pullquote-inner { max-width: 900px; margin: 0 auto; }
+.pullquote-mark { font-family: 'DM Serif Display', serif; font-size: 80px; color: var(--sage); line-height: 0.5; margin-bottom: 1.5rem; display: block; }
+.pullquote-text { font-family: 'DM Serif Display', serif; font-style: italic; font-size: clamp(24px, 3vw, 40px); color: var(--ink); line-height: 1.35; letter-spacing: -0.015em; margin-bottom: 2.5rem; }
+.pullquote-byline { font-size: 12.5px; color: var(--stone); letter-spacing: 0.04em; }
+.pullquote-more { display: flex; gap: 2.5rem; margin-top: 5rem; padding-top: 3rem; border-top: 1px solid rgba(8,10,7,0.08); }
+.pqm-card { flex: 1; }
+.pqm-card-q { font-family: 'DM Serif Display', serif; font-style: italic; font-size: 17px; color: var(--ink); line-height: 1.55; margin-bottom: 1rem; }
+.pqm-card-by { font-size: 12px; color: var(--stone); letter-spacing: 0.03em; }
+
+/* ── SCAN DEMO ────────────────────────────────── */
+.demo-section { background: var(--linen); padding: 9rem 2.5rem; }
+.demo-inner { display: grid; grid-template-columns: 1fr 1fr; gap: 8rem; align-items: center; }
+.demo-left h2 { font-family: 'DM Serif Display', serif; font-size: clamp(36px, 4vw, 52px); color: var(--ink); line-height: 1.1; letter-spacing: -0.025em; margin-bottom: 1.5rem; }
+.demo-left h2 em { font-style: italic; }
+.demo-left p { font-size: 15px; font-weight: 300; color: #3A3D37; line-height: 1.8; margin-bottom: 2.5rem; }
+.demo-right { }
+.demo-window {
+  background: var(--ink); border-radius: 12px; overflow: hidden;
+}
+.demo-titlebar {
+  background: #141610; padding: 0.7rem 1rem;
+  display: flex; align-items: center; gap: 6px;
+}
+.demo-dot { width: 10px; height: 10px; border-radius: 50%; }
+.demo-content { padding: 1.25rem; display: flex; flex-direction: column; gap: 2px; }
+.scan-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0.85rem 1rem; border-radius: 7px; cursor: default;
+  transition: background .15s;
+}
+.scan-item:hover { background: rgba(255,255,255,0.04); }
+.scan-icon-box {
+  width: 34px; height: 34px; border-radius: 6px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+}
+.scan-icon-box.recycle { background: #1E3D10; }
+.scan-icon-box.compost { background: #3D2E06; }
+.scan-icon-box.hazard  { background: #3D0E0E; }
+.scan-icon-box.ewaste  { background: #0E2B3D; }
+.scan-item-name { font-size: 13.5px; color: rgba(240,235,225,0.9); font-weight: 400; flex: 1; }
+.scan-item-sub  { font-size: 11.5px; color: rgba(240,235,225,0.35); margin-top: 2px; }
+.scan-pill {
+  font-size: 10.5px; font-weight: 500; padding: 3px 9px; border-radius: 100px; flex-shrink: 0;
+  letter-spacing: 0.03em;
+}
+.scan-pill.recycle { background: #1E3D10; color: #7DC45A; }
+.scan-pill.compost  { background: #3D2E06; color: #D4A642; }
+.scan-pill.hazard   { background: #3D0E0E; color: #D46060; }
+.scan-pill.ewaste   { background: #0E2B3D; color: #60AAD4; }
+.demo-divider { height: 1px; background: rgba(255,255,255,0.05); margin: 0.25rem 0; }
+.demo-footer { padding: 1rem 1.25rem; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid rgba(255,255,255,0.05); }
+.demo-footer-txt { font-size: 11px; color: rgba(240,235,225,0.25); }
+.demo-footer-btn { font-size: 11.5px; background: var(--moss); color: #fff; border: none; border-radius: 4px; padding: 0.35rem 0.8rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+
+/* ── MOTION & RESPONSIVE ─────────────────────── */
+.reveal { opacity: 0; transform: translateY(24px); transition: opacity .75s ease, transform .75s cubic-bezier(.16,1,.3,1); }
+.reveal.is-visible { opacity: 1; transform: none; }
+
+@media (max-width: 900px) {
+  .nav { padding: 0 1.25rem; }
+  .nav-menu { display: flex; order: 3; }
+  .nav-end { margin-left: auto; margin-right: .5rem; }
+  .nav-signin { display: none; }
+  .nav-links { position: fixed; left: 0; right: 0; top: 60px; display: flex; flex-direction: column; gap: 0; padding: .75rem 1.25rem 1.25rem; background: rgba(253,252,250,.98); border-bottom: 1px solid rgba(8,10,7,.08); transform: translateY(-130%); opacity: 0; visibility: hidden; transition: .25s ease; }
+  .nav-links.open { transform: none; opacity: 1; visibility: visible; }
+  .nav-links a { padding: .85rem 0; font-size: 15px; border-bottom: 1px solid rgba(8,10,7,.06); }
+  .hero-body { padding-inline: 1.5rem; }
+  .statement, .impact-top, .demo-inner { grid-template-columns: 1fr; gap: 3rem; }
+  .statement-left { position: static; }
+  .features-top { align-items: flex-start; gap: 3rem; }
+  .process-steps, .impact-nums { grid-template-columns: repeat(2, 1fr); row-gap: 3rem; }
+  .process-step:nth-child(2) { border-right: 0; }
+  .impact-num:nth-child(2) { border-right: 0; }
+  .demo-right { max-width: 660px; width: 100%; }
+}
+
+@media (max-width: 640px) {
+  .nav { padding-inline: 1rem; }
+  .nav-btn { display: none; }
+  .hero { min-height: 700px; }
+  .hero-body { flex-direction: column; align-items: flex-start; justify-content: flex-end; gap: 2rem; padding: 0 1rem 2rem; }
+  .hero-headline { font-size: clamp(56px, 21vw, 86px); }
+  .hero-right { max-width: 100%; padding-bottom: 0; }
+  .hero-stats { width: 100%; justify-content: space-between; gap: 1rem; }
+  .statement, .features-section, .process, .impact-section, .pullquote, .demo-section { padding: 6rem 1rem; }
+  .statement { gap: 2rem; }
+  .photo-pair { grid-template-columns: 1fr; height: auto; }
+  .photo-pair-main { height: 55vh; min-height: 380px; }
+  .photo-pair-side { display: grid; grid-template-columns: 1fr 1fr; }
+  .photo-pair-aside, .photo-pair-aside2 { min-height: 220px; padding: 1.25rem; }
+  .features-top { flex-direction: column; margin-bottom: 3rem; padding-bottom: 2rem; }
+  .feat-row { grid-template-columns: 1fr; gap: .7rem; padding: 1.5rem 0; }
+  .feat-row:hover { margin: 0 -1rem; padding-left: 1rem; padding-right: 1rem; }
+  .process-steps { grid-template-columns: 1fr; gap: 0; border-left: 0; }
+  .process-step { border-right: 0; border-top: 1px solid rgba(8,10,7,.1); padding: 1.75rem 0; }
+  .process-step-n { margin-bottom: 1rem; }
+  .impact-top { margin-bottom: 3rem; }
+  .impact-nums { grid-template-columns: 1fr 1fr; row-gap: 0; }
+  .impact-num { margin-right: 1rem; padding: 1.5rem 1rem 1.5rem 0; }
+  .impact-row { align-items: flex-start; flex-wrap: wrap; }
+  .impact-row-bar-wrap { flex-basis: calc(100% - 80px); order: 3; }
+  .pullquote-more { flex-direction: column; }
+  .pqm-card[style] { border-left: 0 !important; border-top: 1px solid rgba(8,10,7,.08); padding-left: 0 !important; padding-top: 2rem; }
+  .cta-band { padding: 5rem 1rem; flex-direction: column; align-items: flex-start; }
+  .cta-right { max-width: 100%; }
+  .footer { padding: 2rem 1rem; flex-wrap: wrap; gap: 1.5rem; }
+  .footer-center { width: 100%; order: 3; }
+}
+
+/* ── CTA ────────────────────────────────── */
+.cta-band {
+  background: var(--moss); padding: 7rem 2.5rem;
+  display: flex; justify-content: space-between; align-items: flex-end; gap: 4rem;
+}
+.cta-hed { font-family: 'DM Serif Display', serif; font-size: clamp(42px, 5vw, 72px); color: var(--linen); line-height: 0.98; letter-spacing: -0.03em; }
+.cta-hed em { font-style: italic; }
+.cta-right { max-width: 320px; flex-shrink: 0; }
+.cta-right p { font-size: 14.5px; font-weight: 300; color: rgba(240,235,225,0.75); line-height: 1.75; margin-bottom: 2rem; }
+.cta-right-btns { display: flex; gap: 10px; flex-wrap: wrap; }
+.btn-linen { background: var(--linen); color: var(--ink); border: none; border-radius: 5px; padding: 0.7rem 1.5rem; font-size: 13.5px; font-weight: 500; font-family: 'DM Sans', sans-serif; transition: background .18s; }
+.btn-linen:hover { background: var(--white); }
+.btn-linen-outline { background: none; color: var(--linen); border: 1px solid rgba(240,235,225,0.35); border-radius: 5px; padding: 0.7rem 1.5rem; font-size: 13.5px; font-weight: 400; font-family: 'DM Sans', sans-serif; transition: border-color .18s; }
+.btn-linen-outline:hover { border-color: var(--linen); }
+
+/* ── FOOTER ────────────────────────────────── */
+.footer {
+  background: #05070A; padding: 2.5rem 2.5rem;
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid rgba(255,255,255,0.04);
+}
+.footer-left { display: flex; align-items: center; gap: 10px; }
+.footer-left img { height: 26px; width: 26px; object-fit: contain; opacity: 0.7; }
+.footer-wordmark { font-family: 'DM Serif Display', serif; font-size: 15px; color: rgba(240,235,225,0.5); }
+.footer-center { font-size: 11.5px; color: rgba(255,255,255,0.18); letter-spacing: 0.02em; }
+.footer-links { display: flex; gap: 1.5rem; }
+.footer-links a { font-size: 11.5px; color: rgba(255,255,255,0.25); transition: color .18s; letter-spacing: 0.01em; }
+.footer-links a:hover { color: rgba(255,255,255,0.6); }
+
+@media (max-width: 640px) {
+  .cta-band { padding: 5rem 1rem; flex-direction: column; align-items: flex-start; }
+  .cta-right { max-width: 100%; }
+  .footer { padding: 2rem 1rem; flex-wrap: wrap; gap: 1.5rem; }
+  .footer-center { width: 100%; order: 3; }
+}
+
+/* ── MISC ───────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<!-- NAV -->
+<nav class="nav" aria-label="Primary navigation">
+  <a href="#main" class="nav-logo" aria-label="Grounded home">
+    <img src="assets/logo.png" alt="Grounded">
+    <span class="nav-wordmark">Grounded</span>
+  </a>
+  <div class="nav-links" id="nav-links">
+    <a href="#features">Features</a>
+    <a href="#process">How it works</a>
+    <a href="#impact">Impact</a>
+    <a href="#community">Community</a>
+  </div>
+  <div class="nav-end">
+    <button class="nav-signin" data-open-dashboard id="nav-impact">Live dashboard</button>
+    <button class="nav-btn" data-open-dashboard>Launch digital twin</button>
+  </div>
+  <button class="nav-menu" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Open menu"><span class="nav-menu-lines"></span></button>
+</nav>
+
+<main id="main">
+<!-- HERO -->
+<section class="hero" aria-labelledby="hero-title">
+  <div class="hero-photo">
+    <img src="assets/hero-field.png" alt="Lush green rice fields under a wide sky">
+  </div>
+  <div class="hero-scrim"></div>
+  <div class="hero-body">
+    <h1 class="hero-headline" id="hero-title">Plan<br>ahead.<br><em>Stay<br>ground<br>ed.</em></h1>
+    <div class="hero-right">
+      <p class="hero-sub">Stress-test a community microgrid across thousands of futures. Find where resilience fails — then prove the smallest intervention that survives.</p>
+      <div class="hero-cta">
+        <button class="btn-primary" data-open-dashboard>Launch digital twin</button>
+        <a class="btn-ghost" href="#process">See how it works</a>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <div class="hero-stat-val">73.5K</div>
+          <div class="hero-stat-lbl">strategy simulations</div>
+        </div>
+        <div>
+          <div class="hero-stat-val">245</div>
+          <div class="hero-stat-lbl">plans compared</div>
+        </div>
+        <div>
+          <div class="hero-stat-val">15 min</div>
+          <div class="hero-stat-lbl">energy resolution</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TICKER -->
+<div class="ticker" aria-hidden="true">
+  <div class="ticker-track">
+    <span class="ticker-item"><b>2,500 futures</b> across five climate hazards</span>
+    <span class="ticker-item"><b>245 interventions</b> exhaustively evaluated</span>
+    <span class="ticker-item"><b>73,500 seeded</b> strategy simulations</span>
+    <span class="ticker-item"><b>Same-seed</b> counterfactual proof</span>
+    <span class="ticker-item"><b>15-minute</b> energy-flow resolution</span>
+    <span class="ticker-item"><b>Persistent</b> evidence forest</span>
+    <span class="ticker-item"><b>2,500 futures</b> across five climate hazards</span>
+    <span class="ticker-item"><b>245 interventions</b> exhaustively evaluated</span>
+    <span class="ticker-item"><b>73,500 seeded</b> strategy simulations</span>
+    <span class="ticker-item"><b>Same-seed</b> counterfactual proof</span>
+    <span class="ticker-item"><b>15-minute</b> energy-flow resolution</span>
+    <span class="ticker-item"><b>Persistent</b> evidence forest</span>
+  </div>
+</div>
+
+<!-- STATEMENT -->
+<section class="statement" id="why">
+  <div class="statement-left">
+    <p class="statement-label">Why it matters</p>
+    <h2 class="statement-hed">Climate plans<br>should be<br><em>provable.</em></h2>
+  </div>
+  <div class="statement-right">
+    <p>Averages hide the moment a community actually fails. A plan can look safe on paper, then collapse when heat, cloud cover, EV demand, and a grid outage arrive together — exactly when a hospital cannot afford uncertainty.</p>
+    <p>Grounded turns that uncertainty into evidence. It simulates the energy balance every fifteen minutes, reconstructs the causal chain behind each failure, and tests interventions against the exact same future until resilience is proven.</p>
+  </div>
+</section>
+
+<!-- PHOTO PAIR -->
+<div class="photo-pair">
+  <div class="photo-pair-main">
+    <img src="assets/forest-canopy.png" alt="Forest canopy viewed from the ground, birds flying above">
+  </div>
+  <div class="photo-pair-side">
+    <div class="photo-pair-aside">
+      <p class="photo-pair-aside-lbl">Our mission</p>
+      <p class="photo-pair-aside-hed">Every tree is earned by evidence. Every building marks a resilience gain we actually proved.</p>
+    </div>
+    <div class="photo-pair-aside2">
+      <strong>96</strong>
+      <p>Energy decisions in every simulated day — tracking generation, storage, demand, and grid availability at fifteen-minute resolution.</p>
+    </div>
+  </div>
+</div>
+
+<!-- FEATURES -->
+<section class="features-section" id="features">
+  <div class="features-top">
+    <h2 class="features-hed">What<br>Grounded<br><em>does.</em></h2>
+    <div class="features-desc">
+      <p>Six capabilities, working together — from a living microgrid to a reproducible recommendation a judge can inspect and challenge.</p>
+      <button class="btn-primary" style="margin-top:0.5rem" data-open-dashboard>Explore the platform</button>
+    </div>
+  </div>
+  <div class="features-rows">
+    <div class="feat-row">
+      <div><div class="feat-row-name">Seeded climate futures</div><div class="feat-row-tag">Core</div></div>
+      <div class="feat-row-type">Monte Carlo engine</div>
+      <div class="feat-row-desc">Simulate weather, cloud cover, demand, and grid outages with deterministic seeds, so every result is reproducible instead of anecdotal.</div>
+    </div>
+    <div class="feat-row">
+      <div><div class="feat-row-name">Multi-hazard matrix</div><div class="feat-row-tag">Systems</div></div>
+      <div class="feat-row-type">Risk analysis</div>
+      <div class="feat-row-desc">Stress-test one microgrid with the same seeds across normal, heatwave, storm, EV surge, and extreme-combined conditions.</div>
+    </div>
+    <div class="feat-row">
+      <div><div class="feat-row-name">Failure-chain forensics</div><div class="feat-row-tag">Explainable</div></div>
+      <div class="feat-row-type">Causal replay</div>
+      <div class="feat-row-desc">Trace a hospital outage back through its exact sequence: grid loss, solar shortfall, battery depletion, and automatic load shedding.</div>
+    </div>
+    <div class="feat-row">
+      <div><div class="feat-row-name">Explainable optimizer</div><div class="feat-row-tag">Decision</div></div>
+      <div class="feat-row-type">Pareto search</div>
+      <div class="feat-row-desc">Evaluate 245 interventions across 73,500 seeded futures, then expose the non-dominated frontier instead of hiding the trade-offs.</div>
+    </div>
+    <div class="feat-row">
+      <div><div class="feat-row-name">Counterfactual worlds</div><div class="feat-row-tag">Proof</div></div>
+      <div class="feat-row-type">Same-seed comparison</div>
+      <div class="feat-row-desc">Replay the exact failing future before and after an intervention. World A fails; World B survives; only the plan changed.</div>
+    </div>
+    <div class="feat-row">
+      <div><div class="feat-row-name">Resilience forest</div><div class="feat-row-tag">Persistent</div></div>
+      <div class="feat-row-type">Evidence ledger</div>
+      <div class="feat-row-desc">Turn verified resilience gains into a living city-and-forest record backed by a persistent SQLite evidence trail.</div>
+    </div>
+  </div>
+</section>
+
+<!-- PROCESS -->
+<section class="process" id="process">
+  <h2 class="process-hed">Four steps.<br><em>One proof.</em></h2>
+  <div class="process-steps">
+    <div class="process-step">
+      <span class="process-step-n">Step one</span>
+      <h4>Model the microgrid</h4>
+      <p>Start with a living system of solar generation, battery storage, homes, EV charging, the grid, and critical hospital demand.</p>
+    </div>
+    <div class="process-step">
+      <span class="process-step-n">Step two</span>
+      <h4>Explore climate futures</h4>
+      <p>Run hundreds of reproducible futures and a five-hazard matrix to expose the conditions that turn ordinary stress into cascading failure.</p>
+    </div>
+    <div class="process-step">
+      <span class="process-step-n">Step three</span>
+      <h4>Find a resilient plan</h4>
+      <p>Search every candidate intervention and inspect the Pareto frontier across risk reduction, disruption, and emergency reserve.</p>
+    </div>
+    <div class="process-step">
+      <span class="process-step-n">Step four</span>
+      <h4>Prove the difference</h4>
+      <p>Replay the same seed before and after the chosen plan, then save the verified gain as permanent evidence in the resilience forest.</p>
+    </div>
+  </div>
+</section>
+
+<!-- FOREST IMMERSIVE -->
+<div class="forest-immersive">
+  <img src="assets/forest-canopy.png" alt="Looking up through dense forest canopy at birds in the sky">
+  <div class="forest-scrim"></div>
+  <div class="forest-inner">
+    <p class="forest-quote">"Resilience is not a promise. It is a plan that has survived the future before the future arrives."</p>
+    <p class="forest-attr">Grounded — built for NextStep Hacks 2026</p>
+    <button class="btn-primary" data-open-dashboard>Launch the digital twin</button>
+  </div>
+</div>
+
+<!-- IMPACT -->
+<section class="impact-section" id="impact">
+  <div class="impact-top">
+    <h2 class="impact-hed">Evidence<br>judges can<br><em>interrogate.</em></h2>
+    <p class="impact-sub">Every number below comes from the working simulation pipeline — deterministic, backend-validated, and visible in the live dashboard.</p>
+  </div>
+  <div class="impact-nums">
+    <div class="impact-num">
+      <div class="impact-num-val">96</div>
+      <div class="impact-num-lbl">Energy-flow decisions per simulated day at fifteen-minute resolution</div>
+    </div>
+    <div class="impact-num">
+      <div class="impact-num-val">5</div>
+      <div class="impact-num-lbl">Climate hazard presets compared with identical random seeds</div>
+    </div>
+    <div class="impact-num">
+      <div class="impact-num-val">245</div>
+      <div class="impact-num-lbl">Candidate intervention strategies evaluated in every optimization search</div>
+    </div>
+    <div class="impact-num">
+      <div class="impact-num-val">73.5K</div>
+      <div class="impact-num-lbl">Seeded strategy futures scored before one plan is recommended</div>
+    </div>
+  </div>
+  <div class="impact-rows">
+    <div class="impact-row">
+      <span class="impact-row-name">Candidate strategy space evaluated per optimizer run</span>
+      <div class="impact-row-bar-wrap"><div class="impact-row-bar" style="width:100%"></div></div>
+      <span class="impact-row-val">100%</span>
+    </div>
+    <div class="impact-row">
+      <span class="impact-row-name">Same-seed reproducibility across counterfactual worlds</span>
+      <div class="impact-row-bar-wrap"><div class="impact-row-bar" style="width:100%"></div></div>
+      <span class="impact-row-val">Exact</span>
+    </div>
+    <div class="impact-row">
+      <span class="impact-row-name">Critical futures removed in the verified Jaipur example</span>
+      <div class="impact-row-bar-wrap"><div class="impact-row-bar" style="width:77%"></div></div>
+      <span class="impact-row-val">77%</span>
+    </div>
+    <div class="impact-row">
+      <span class="impact-row-name">Recommended plans revalidated on the full population</span>
+      <div class="impact-row-bar-wrap"><div class="impact-row-bar" style="width:100%"></div></div>
+      <span class="impact-row-val">100%</span>
+    </div>
+  </div>
+</section>
+
+<!-- PULL QUOTE -->
+<section class="pullquote" id="community">
+  <div class="pullquote-inner">
+    <span class="pullquote-mark">&ldquo;</span>
+    <p class="pullquote-text">A community should not have to wait for a blackout to learn that its resilience plan was fragile.</p>
+    <p class="pullquote-byline">The Grounded principle — prevention through simulation</p>
+    <div class="pullquote-more">
+      <div class="pqm-card">
+        <p class="pqm-card-q">Emergency planners can trace exactly why critical infrastructure failed — and which intervention changes the outcome.</p>
+        <p class="pqm-card-by">Use case 01 — critical infrastructure</p>
+      </div>
+      <div class="pqm-card" style="border-left: 1px solid rgba(8,10,7,0.08); padding-left: 2.5rem;">
+        <p class="pqm-card-q">Researchers can compare hazards and policies on identical seeded futures, making every conclusion reproducible.</p>
+        <p class="pqm-card-by">Use case 02 — climate research</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE SYSTEM PROOF -->
+<section class="demo-section">
+  <div class="demo-inner">
+    <div class="demo-left">
+      <h2>Proof, not<br><em>predictions.</em></h2>
+      <p>The dashboard is not a mockup. Every panel drives the same deterministic simulation engine, from multi-hazard stress testing to the final same-seed counterfactual.</p>
+      <button class="btn-primary" data-open-dashboard>Open live dashboard</button>
+    </div>
+    <div class="demo-right">
+      <div class="demo-window">
+        <div class="demo-titlebar">
+          <div class="demo-dot" style="background:#E24B4A"></div>
+          <div class="demo-dot" style="background:#EF9F27"></div>
+          <div class="demo-dot" style="background:#4A9B1F"></div>
+        </div>
+        <div class="demo-content">
+          <div class="scan-item">
+            <div class="scan-icon-box recycle">◎</div>
+            <div><div class="scan-item-name">Extreme combined event</div><div class="scan-item-sub">500 futures · Heat + low solar + outage</div></div>
+            <span class="scan-pill recycle">Stress test</span>
+          </div>
+          <div class="demo-divider"></div>
+          <div class="scan-item">
+            <div class="scan-icon-box compost">◇</div>
+            <div><div class="scan-item-name">Strategy search</div><div class="scan-item-sub">245 plans · 300 seeded futures each</div></div>
+            <span class="scan-pill compost">73,500 runs</span>
+          </div>
+          <div class="demo-divider"></div>
+          <div class="scan-item">
+            <div class="scan-icon-box hazard">▣</div>
+            <div><div class="scan-item-name">Recommended reserve</div><div class="scan-item-sub">30% emergency battery floor</div></div>
+            <span class="scan-pill hazard">Selected</span>
+          </div>
+          <div class="demo-divider"></div>
+          <div class="scan-item">
+            <div class="scan-icon-box ewaste">✓</div>
+            <div><div class="scan-item-name">Counterfactual replay</div><div class="scan-item-sub">Same seed · World A fails, World B survives</div></div>
+            <span class="scan-pill ewaste">Proven</span>
+          </div>
+        </div>
+        <div class="demo-footer">
+          <span class="demo-footer-txt">Connected simulation engine · Jaipur, IN</span>
+          <button class="demo-footer-btn" data-open-dashboard>Launch model</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA BAND -->
+<section class="cta-band">
+  <h2 class="cta-hed">Ready<br>to get<br><em>ground<br>ed?</em></h2>
+  <div class="cta-right">
+    <p>Build a microgrid, break it across thousands of possible futures, and prove the smallest plan that keeps critical infrastructure alive.</p>
+    <div class="cta-right-btns">
+      <button class="btn-linen" data-open-dashboard>Start exploring</button>
+      <a class="btn-linen-outline" href="#features">See the features</a>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- FOOTER -->
+<footer class="footer">
+  <div class="footer-left">
+    <img src="assets/logo.png" alt="Grounded">
+    <span class="footer-wordmark">Grounded</span>
+  </div>
+  <p class="footer-center">Built for NextStep Hacks 2026 &nbsp;·&nbsp; Earth Forward theme</p>
+  <div class="footer-links">
+    <a href="#why">Mission</a>
+    <a href="#features">Features</a>
+    <a href="#impact">Impact</a>
+    <a href="mailto:hello@grounded.eco">Contact</a>
+  </div>
+</footer>
+
+<script>
+(() => {
+  const menu = document.querySelector('.nav-menu');
+  const navLinks = document.querySelector('.nav-links');
+
+  function openDashboard() {
+    const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+    location.href = isLocal ? `${location.protocol}//localhost:5173/` : '/app/';
+  }
+  document.querySelectorAll('[data-open-dashboard]').forEach(button => button.addEventListener('click', openDashboard));
+
+  menu.addEventListener('click', () => {
+    const expanded = menu.getAttribute('aria-expanded') === 'true';
+    menu.setAttribute('aria-expanded', String(!expanded));
+    menu.setAttribute('aria-label', expanded ? 'Open menu' : 'Close menu');
+    navLinks.classList.toggle('open', !expanded);
+  });
+  navLinks.querySelectorAll('a').forEach(link => link.addEventListener('click', () => {
+    menu.setAttribute('aria-expanded', 'false');
+    menu.setAttribute('aria-label', 'Open menu');
+    navLinks.classList.remove('open');
+  }));
+
+  const revealTargets = document.querySelectorAll('.statement > *, .features-top > *, .feat-row, .process-step, .impact-top > *, .impact-num, .impact-row, .pullquote-inner, .demo-inner > *, .cta-band > *');
+  if ('IntersectionObserver' in window && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    revealTargets.forEach(element => element.classList.add('reveal'));
+    const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (entry.isIntersecting) { entry.target.classList.add('is-visible'); revealObserver.unobserve(entry.target); }
+    }), { threshold: .12 });
+    revealTargets.forEach(element => revealObserver.observe(element));
+  }
+
+  const sections = [...document.querySelectorAll('section[id]')];
+  const navObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    navLinks.querySelectorAll('a').forEach(link => link.classList.toggle('active', link.hash === `#${entry.target.id}`));
+  }), { rootMargin: '-35% 0px -55%' });
+  sections.forEach(section => navObserver.observe(section));
+})();
+</script>
+
+</body>
+</html>

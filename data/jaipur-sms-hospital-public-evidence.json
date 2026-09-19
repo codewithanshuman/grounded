@@ -1,0 +1,29 @@
+{
+  "id": "sms-hospital-dharamshala-public-evidence-2026",
+  "label": "Rajkiya Dharamshala, Sawai Man Singh Hospital",
+  "location": "Jaipur, Rajasthan, India",
+  "evidenceStatus": "PUBLIC_SITE_EVIDENCE",
+  "assessmentPeriod": "2025–26 impact assessment",
+  "solarCapacityKWp": 70,
+  "reportedSolarDemandSharePct": 80,
+  "monthlyBillBeforeINR": 90000,
+  "monthlyBillAfterINR": 40000,
+  "evidenceBasis": "Independent impact assessment using project records, a field visit, structured surveys and key-informant interviews with the hospital CMO office and operations team.",
+  "source": {
+    "title": "Impact Assessment: Solar Power Plants in Government Hospitals",
+    "publisher": "Aavas Financiers Ltd / Aavas Foundation; assessment by SGS",
+    "url": "https://www.aavas.in/img/pdf/solar-power-plants-in-government-hospitals-2025-26.pdf",
+    "pages": [9, 17, 22]
+  },
+  "limitations": [
+    "The report provides installed capacity, approximate demand share and reported monthly bills, not 15-minute meter or inverter telemetry.",
+    "The system is on-grid; published evidence does not establish islanded backup performance during outages.",
+    "Grounded does not use these aggregate values as interval simulation inputs until the facility supplies meter, PV and outage exports."
+  ],
+  "commissioningRequest": [
+    "At least 30 days of 15-minute facility demand readings",
+    "Matching inverter or revenue-meter PV production",
+    "Timestamped outage and restoration history",
+    "Written confirmation of the site boundary and critical-load definition"
+  ]
+}

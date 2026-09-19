@@ -3,9 +3,14 @@
 .openai
 .codex-artifacts
 .codex-hosting
+.chart-data-*
+.turbo
+node_modules
+dist
 submission
 validation/inbox
 validation/reports
+.tmp-site-data
 test-results
 playwright-report
 *.db

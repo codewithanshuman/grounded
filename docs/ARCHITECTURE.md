@@ -7,7 +7,7 @@ flowchart LR
   B2[PV inverter CSV] --> D
   B3[Outage/restoration CSV] --> D
   D --> E[Fingerprint + blocked holdout]
-  C --> F[Engine 2.3 correlated dispatch Monte Carlo]
+  C --> F[Engine 2.6 correlated dispatch Monte Carlo]
   E --> F
   F --> G[Risk + causal failure chain]
   F --> H[245-strategy multi-hazard search]
@@ -35,4 +35,3 @@ flowchart LR
 Fastify serves the React production bundle, REST endpoints and WebSocket stream.
 SQLite stores complete run summaries and forest growth. A Docker health check
 verifies the API. NASA calibration is cached for an offline-safe demonstration.
-

@@ -43,21 +43,23 @@ test("judge path runs measured extreme futures and exposes auditable proof", asy
   expect(consoleErrors).toEqual([]);
 });
 
-test("optimizer proves paired holdout safety and assumption-shock stability", async ({ page }) => {
-  test.setTimeout(180_000);
+test("optimizer proves paired holdout safety and compound-stress stability", async ({ page }) => {
+  test.setTimeout(300_000);
   await page.goto("/");
   await page.locator(".run-controls select").nth(1).selectOption("500");
   await page.getByRole("button", { name: /Extreme Combined Event/ }).click();
   await page.getByRole("button", { name: /RUN SIMULATION/ }).click();
   await expect(page.getByText("7/7 invariants passed")).toBeVisible({ timeout: 90_000 });
-  await page.getByRole("button", { name: /04 Strategy/ }).click();
+  await page.getByRole("button", { name: /Strategy/ }).click();
   await page.getByRole("button", { name: "Run optimizer", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Same future. Better outcome." })).toBeVisible({ timeout: 150_000 });
   await expect(page.getByText(/saved · \d+ introduced/)).toBeVisible();
-  await page.getByRole("button", { name: /04 Strategy/ }).click();
+  await page.getByRole("button", { name: /Strategy/ }).click();
   await expect(page.getByText("PAIRED GENERALIZATION AUDIT")).toBeVisible({ timeout: 150_000 });
-  await expect(page.getByText(/zero-regression cohorts/)).toBeVisible();
+  await expect(page.getByText(/statistically resolved/)).toBeVisible();
   await expect(page.getByText("+20% restoration time")).toBeVisible();
+  await expect(page.getByText("81-CELL COMPOUND STRESS ENVELOPE")).toBeVisible();
+  await expect(page.getByText("DISCLOSED WORST CASE")).toBeVisible();
   await expect(page.getByText(/introduced/).first()).toBeVisible();
 });
 

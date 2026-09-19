@@ -254,5 +254,13 @@ describe("optimizeIntervention", () => {
     expect(validation.shockResults).toHaveLength(4);
     expect(validation.cohorts.every((cohort) => cohort.preventedFailures >= 0 && cohort.introducedFailures >= 0)).toBe(true);
     expect(validation.cohorts.every((cohort) => cohort.afterWilsonHighPct >= cohort.afterCriticalPct)).toBe(true);
-  }, 15000);
+    expect(validation.cohorts.every((cohort) => cohort.pairedPValue >= 0 && cohort.pairedPValue <= 1)).toBe(true);
+    expect(validation.statisticallyResolvedCohorts).toBe(validation.cohorts.filter((cohort) => cohort.pairedPValue < 0.05).length);
+    expect(validation.jointStressEnvelope.evaluatedCells).toBe(81);
+    expect(validation.jointStressEnvelope.dimensions).toHaveLength(4);
+    expect(validation.jointStressEnvelope.sampleSizePerCell).toBe(20);
+    expect(validation.jointStressEnvelope.passingCells).toBeLessThanOrEqual(81);
+    expect(validation.jointStressEnvelope.zeroRegressionCells).toBeLessThanOrEqual(81);
+    expect(validation.jointStressEnvelope.worstCell.label.length).toBeGreaterThan(0);
+  }, 30000);
 });

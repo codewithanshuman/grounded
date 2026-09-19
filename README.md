@@ -22,7 +22,7 @@ Source: https://github.com/anshumanbahekar/grounded
 - **Engineering-level accounting** — PV temperature loss, battery charge and
   discharge limits, round-trip efficiency, minimum SOC, degradation cost,
   grid cost, grid carbon and critical/flexible unserved energy are all part of
-  the executable model. Engine 2.5 also reports LOLP, LOLE, EENS and CVaR95 so
+  the executable model. Engine 2.6 also reports LOLP, LOLE, EENS and CVaR95 so
   judges can distinguish failure frequency, duration, energy severity and the
   average outcome inside the worst 5% of futures.
 - **Conservative renewable provenance** — direct solar and solar-charged
@@ -38,7 +38,8 @@ Source: https://github.com/anshumanbahekar/grounded
   evaluates 245 battery-reserve, EV-delay, and pre-cooling strategies on an
   independent 300-future discovery cohort, exposes the non-dominated Pareto
   frontier, then validates the winner on the original unseen population,
-  three additional disjoint holdouts and four disclosed assumption shocks.
+  three additional disjoint holdouts, exact paired McNemar inference, four
+  disclosed one-at-a-time shocks and an 81-cell compound stress envelope.
 - **Machine-audited dispatch** — every 15-minute step closes an explicit
   source-to-sink energy balance. Seven invariants verify conservation,
   classification totals, battery bounds, finite outputs, exact replay,
@@ -65,9 +66,11 @@ Source: https://github.com/anshumanbahekar/grounded
   selected plan is validated on the original population and replayed against
   the 12 highest-stress dated NASA POWER climate days from 2023. NASA supplies
   observed weather; outage and demand conditions remain explicitly simulated.
-- **Paired policy safety** — every holdout and assumption shock replays
-  identical seeds before and after intervention, counts prevented and newly
-  introduced failures, and reports Wilson bounds, P99 severity and CVaR99.
+- **Paired policy safety** — every holdout and stress cell replays identical
+  seeds before and after intervention, counts prevented and newly introduced
+  failures, and reports exact paired p-values, Wilson bounds, P99 severity and
+  CVaR99. The 81-cell full-factorial envelope tests restoration time, demand,
+  solar capacity and starting battery SOC together and discloses its worst cell.
 - **Counterfactual proof** — the Compare Worlds panel replays the identical
   failure seed before and after the intervention, showing whether the hospital
   actually keeps power.
@@ -91,8 +94,8 @@ Source: https://github.com/anshumanbahekar/grounded
    condition.
 4. Open **Optimizer** and run the search: point out 245 strategies across five
    hazards, the risk/energy/cost/carbon Pareto frontier, the independent discovery cohort,
-   three holdouts, assumption-shock audit, ablation benchmarks and dated
-   historical-climate replay.
+   three holdouts, exact paired inference, the 81-cell compound stress envelope,
+   ablation benchmarks and dated historical-climate replay.
 5. Open **Method**: show the measured demand/PV curves, 9,210 historical outage
    records, restoration P50/P90/P95 and all three clickable source records.
 6. Open **Compare**: show the same seed failing in World A and surviving in

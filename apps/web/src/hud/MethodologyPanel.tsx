@@ -23,7 +23,7 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
   return (
     <div className="methodology">
       <section className="model-card-hero">
-        <div><small>MODEL CARD · ENGINE 2.5</small><h4>Transparent enough to challenge.</h4><p>Grounded is a data-calibrated decision-support prototype, not a certified engineering design tool. Every result comes from executable energy physics, measured operational profiles, correlated hazards and seeded uncertainty; every simplification is disclosed below.</p></div>
+        <div><small>MODEL CARD · ENGINE 2.6</small><h4>Transparent enough to challenge.</h4><p>Grounded is a data-calibrated decision-support prototype, not a certified engineering design tool. Every result comes from executable energy physics, measured operational profiles, correlated hazards and seeded uncertainty; every simplification is disclosed below.</p></div>
         <div className="model-card-seal"><span>{latestRun?.audit?.status === "PASS" ? "✓" : "·"}</span><strong>{latestRun?.audit?.status === "PASS" ? "Audited" : calibration?.source === "NASA_POWER" ? "Calibrated" : "Auditable"}</strong><small>{latestRun?.audit?.status ?? calibration?.status?.toUpperCase() ?? "LOADING"}</small></div>
       </section>
 
@@ -79,7 +79,8 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
             <p><strong>Paired comparisons</strong><span>Before and after worlds share the same hazard seeds.</span></p>
             <p><strong>Independent search cohort</strong><span>245 strategies train on 300 non-overlapping futures across five hazards.</span></p>
             <p><strong>Three disjoint holdouts</strong><span>The selected policy must improve all three unseen seeded cohorts.</span></p>
-            <p><strong>Assumption-shock audit</strong><span>Recommendation is retested under restoration, demand, solar and SOC shocks.</span></p>
+            <p><strong>Exact paired inference</strong><span>McNemar's exact test measures whether prevented failures outweigh newly introduced failures without a normal approximation.</span></p>
+            <p><strong>81-cell compound envelope</strong><span>Restoration, demand, solar and starting SOC are varied together in a full-factorial audit; the worst cell stays visible.</span></p>
             <p><strong>95% Wilson interval</strong><span>Risk reports include sampling uncertainty, even near 0%.</span></p>
             <p><strong>Reliability depth</strong><span>LOLP, LOLE, EENS and CVaR95 separate frequency, duration, energy severity and tail risk.</span></p>
             <p><strong>Carbon-aware Pareto search</strong><span>Grid carbon joins risk, unserved energy, cost and disruption in dominance testing.</span></p>

@@ -9,7 +9,7 @@ import type { ClimateCalibration, ClimateMonth, Intervention, LocationId, Microg
 
 export const DT = 0.25; // hours per simulated step
 export const STEPS = 288; // 72h / 15min: three-day compound-event horizon
-export const MODEL_VERSION = "2.5.0";
+export const MODEL_VERSION = "2.6.0";
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -825,6 +825,7 @@ export interface ValidationCohort {
   introducedFailures: number;
   persistentFailures: number;
   pairedNetBenefitPct: number;
+  pairedPValue: number;
   afterWilsonHighPct: number;
   passed: boolean;
 }
@@ -847,6 +848,27 @@ export interface PolicyBenchmark {
   meanCarbonKg: number;
 }
 
+export interface JointStressCell {
+  label: string;
+  beforeCritical: number;
+  afterCritical: number;
+  preventedFailures: number;
+  introducedFailures: number;
+  residualCriticalPct: number;
+  improvementPct: number;
+  passed: boolean;
+}
+
+export interface JointStressEnvelope {
+  dimensions: string[];
+  evaluatedCells: number;
+  sampleSizePerCell: number;
+  passingCells: number;
+  zeroRegressionCells: number;
+  minimumImprovementPct: number;
+  worstCell: JointStressCell;
+}
+
 export interface OptimizerValidation {
   cohortCount: number;
   passedCohorts: number;
@@ -857,6 +879,24 @@ export interface OptimizerValidation {
   assumptionShocks: string[];
   shockResults: AssumptionShockResult[];
   zeroRegressionCohorts: number;
+  statisticallyResolvedCohorts: number;
+  jointStressEnvelope: JointStressEnvelope;
+}
+
+/** Exact two-sided McNemar test over discordant paired outcomes. This asks
+ * whether prevented and introduced failures are plausibly symmetric without
+ * assuming a normal approximation. */
+function exactMcNemarPValue(preventedFailures: number, introducedFailures: number): number {
+  const discordant = preventedFailures + introducedFailures;
+  if (discordant === 0) return 1;
+  const lowerTail = Math.min(preventedFailures, introducedFailures);
+  let probability = Math.pow(0.5, discordant);
+  let cumulative = probability;
+  for (let index = 1; index <= lowerTail; index++) {
+    probability *= (discordant - index + 1) / index;
+    cumulative += probability;
+  }
+  return Math.min(1, cumulative * 2);
 }
 
 function pairedCriticalTransitions(
@@ -980,7 +1020,8 @@ export function analyzeInterventions(
 }
 
 /** Independent evidence that the chosen policy generalizes. Three disjoint
- * cohorts and four disclosed assumption shocks are evaluated after selection. */
+ * cohorts, four disclosed one-at-a-time shocks and an 81-cell full-factorial
+ * compound stress envelope are evaluated after selection. */
 export function validateIntervention(
   location: LocationDef,
   config: MicrogridConfig,
@@ -1009,6 +1050,7 @@ export function validateIntervention(
       introducedFailures: paired.introducedFailures,
       persistentFailures: paired.persistentFailures,
       pairedNetBenefitPct: Math.round(((paired.preventedFailures - paired.introducedFailures) / sampleSize) * 1000) / 10,
+      pairedPValue: exactMcNemarPValue(paired.preventedFailures, paired.introducedFailures),
       afterWilsonHighPct: afterInterval.highPct,
       passed: paired.afterCritical <= paired.beforeCritical && paired.preventedFailures >= paired.introducedFailures,
     });
@@ -1057,17 +1099,78 @@ export function validateIntervention(
       passed,
     });
   }
+
+  const restorationMultipliers = [1, 1.25, 1.5];
+  const demandMultipliers = [1, 1.1, 1.2];
+  const solarMultipliers = [1, 0.9, 0.8];
+  const socPenalties = [0, 10, 20];
+  const envelopeSampleSize = Math.min(sampleSize, 60);
+  const envelopeSeedOffset = seedOffset + stride * 5;
+  const stressCells: JointStressCell[] = [];
+  for (const restorationMultiplier of restorationMultipliers) {
+    for (const demandMultiplier of demandMultipliers) {
+      for (const solarMultiplier of solarMultipliers) {
+        for (const socPenalty of socPenalties) {
+          const stressedConfig: MicrogridConfig = {
+            ...config,
+            gridRestorationMeanHours: config.gridRestorationMeanHours * restorationMultiplier,
+            avgHomeKW: config.avgHomeKW * demandMultiplier,
+            solarCapacityKW: config.solarCapacityKW * solarMultiplier,
+            batteryStartPct: Math.max(config.batteryMinSocPct, config.batteryStartPct - socPenalty),
+          };
+          const paired = pairedCriticalTransitions(
+            location,
+            stressedConfig,
+            intervention,
+            envelopeSampleSize,
+            envelopeSeedOffset,
+            hazards,
+          );
+          const improvement = paired.beforeCritical > 0
+            ? (1 - paired.afterCritical / paired.beforeCritical) * 100
+            : paired.afterCritical === 0 ? 100 : 0;
+          const passed = paired.afterCritical <= paired.beforeCritical && paired.preventedFailures >= paired.introducedFailures;
+          stressCells.push({
+            label: `restore ×${restorationMultiplier.toFixed(2)} · demand +${Math.round((demandMultiplier - 1) * 100)}% · solar −${Math.round((1 - solarMultiplier) * 100)}% · SOC −${socPenalty}`,
+            beforeCritical: paired.beforeCritical,
+            afterCritical: paired.afterCritical,
+            preventedFailures: paired.preventedFailures,
+            introducedFailures: paired.introducedFailures,
+            residualCriticalPct: Math.round((paired.afterCritical / envelopeSampleSize) * 1000) / 10,
+            improvementPct: Math.round(improvement * 10) / 10,
+            passed,
+          });
+        }
+      }
+    }
+  }
+  const worstCell = [...stressCells].sort((left, right) =>
+    left.improvementPct - right.improvementPct ||
+    right.afterCritical - left.afterCritical ||
+    right.introducedFailures - left.introducedFailures,
+  )[0];
+  const jointStressEnvelope: JointStressEnvelope = {
+    dimensions: ["Restoration time", "Community demand", "Solar capacity", "Starting battery SOC"],
+    evaluatedCells: stressCells.length,
+    sampleSizePerCell: envelopeSampleSize,
+    passingCells: stressCells.filter((cell) => cell.passed).length,
+    zeroRegressionCells: stressCells.filter((cell) => cell.introducedFailures === 0).length,
+    minimumImprovementPct: worstCell.improvementPct,
+    worstCell,
+  };
   const passedCohorts = cohorts.filter((cohort) => cohort.passed).length;
   return {
     cohortCount: cohorts.length,
     passedCohorts,
-    recommendationStable: passedCohorts === cohorts.length && shockStable,
+    recommendationStable: passedCohorts === cohorts.length && shockStable && jointStressEnvelope.passingCells === jointStressEnvelope.evaluatedCells,
     cohorts,
     benchmarks,
     worstCaseImprovementPct: Math.round(worstCaseImprovementPct * 10) / 10,
     assumptionShocks: shocks.map((shock) => shock.label),
     shockResults,
     zeroRegressionCohorts: cohorts.filter((cohort) => cohort.introducedFailures === 0).length,
+    statisticallyResolvedCohorts: cohorts.filter((cohort) => cohort.pairedPValue < 0.05).length,
+    jointStressEnvelope,
   };
 }
 

@@ -416,6 +416,49 @@
   .collaboration-status code { justify-self: start; }
 }
 
+.joint-stress-envelope {
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(74, 101, 78, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(245, 248, 239, 0.95), rgba(232, 241, 226, 0.7));
+}
+
+.joint-stress-envelope.review {
+  border-color: rgba(163, 107, 45, 0.38);
+  background: linear-gradient(135deg, rgba(251, 246, 231, 0.96), rgba(244, 234, 209, 0.72));
+}
+
+.joint-stress-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.joint-stress-heading > div { display: grid; gap: 3px; }
+.joint-stress-heading small,
+.joint-stress-worst small,
+.joint-stress-metrics small { font: 700 8px/1.3 var(--mono); letter-spacing: 0.12em; color: #667765; }
+.joint-stress-heading strong { color: #183d29; font-size: 12px; }
+.joint-stress-heading > span { white-space: nowrap; border: 1px solid rgba(45, 102, 61, 0.25); border-radius: 999px; padding: 5px 8px; color: #276338; font: 700 9px/1 var(--mono); }
+.joint-stress-envelope > p { margin: 9px 0 11px; color: #68766b; font-size: 9px; }
+.joint-stress-metrics { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid rgba(74, 101, 78, 0.16); border-radius: 8px; overflow: hidden; background: rgba(255, 255, 255, 0.52); }
+.joint-stress-metrics > span { display: grid; gap: 3px; padding: 9px 10px; border-left: 1px solid rgba(74, 101, 78, 0.13); }
+.joint-stress-metrics > span:first-child { border-left: 0; }
+.joint-stress-metrics b { color: #183d29; font: 700 14px/1.1 var(--mono); }
+.joint-stress-worst { display: grid; gap: 3px; margin-top: 9px; padding: 10px; border-left: 2px solid #9c7438; background: rgba(255, 255, 255, 0.42); }
+.joint-stress-worst strong { color: #413b2d; font: 700 9px/1.45 var(--mono); }
+.joint-stress-worst p { margin: 0; color: #736a59; font-size: 9px; }
+
+@media (max-width: 720px) {
+  .joint-stress-heading { display: grid; }
+  .joint-stress-heading > span { justify-self: start; }
+  .joint-stress-metrics { grid-template-columns: 1fr; }
+  .joint-stress-metrics > span { border-top: 1px solid rgba(74, 101, 78, 0.13); border-left: 0; }
+  .joint-stress-metrics > span:first-child { border-top: 0; }
+}
+
 /* Stable cinematic framing: the hero keeps its focal composition instead of
    collapsing into a shallow panorama on wide displays. */
 .lab-content > .field-banner {

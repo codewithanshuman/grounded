@@ -4,13 +4,25 @@ import { LOCATIONS, PRESETS, DEFAULT_CONFIG } from "@verdant/sim";
 import { useVerdant, type CommissionSiteInput, type OptimizeResponse } from "./ws/client";
 import { TwinPanel, StressPanel } from "./hud/ControlPanels";
 import logoUrl from "../../../assets/logo-ui.png";
-import fieldUrl from "../../../assets/hero-field.webp";
 import canopyUrl from "../../../assets/forest-canopy-ui.webp";
+import fieldHomeUrl from "../../../assets/grounded-field-home.png";
+import monsoonUrl from "../../../assets/grounded-monsoon.png";
+import cloverSkyUrl from "../../../assets/grounded-clover-sky.png";
+import cloverStudioUrl from "../../../assets/grounded-clover-studio.png";
 import "./fonts.css";
 import "./depth-upgrade.css";
 import "./proof-path.css";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
+
+const WORKSPACE_ART: Record<ViewId, { url: string; position: string }> = {
+  overview: { url: fieldHomeUrl, position: "center 70%" },
+  matrix: { url: monsoonUrl, position: "center 66%" },
+  risk: { url: monsoonUrl, position: "center 72%" },
+  optimizer: { url: cloverSkyUrl, position: "center 54%" },
+  compare: { url: cloverSkyUrl, position: "center 59%" },
+  method: { url: cloverStudioUrl, position: "center 52%" },
+};
 
 const GameCanvas = lazy(() => import("./game/GameCanvas").then((module) => ({ default: module.GameCanvas })));
 const ClimateMatrixPanel = lazy(() => import("./hud/Panels").then((module) => ({ default: module.ClimateMatrixPanel })));
@@ -148,6 +160,7 @@ export default function App() {
     { id: "compare", label: "Proof", index: "05" },
     { id: "method", label: "Method", index: "06" },
   ];
+  const activeArtwork = WORKSPACE_ART[activeView];
 
   return (
     <div className={`lab-shell ${isRunning ? "is-processing" : ""}`}>
@@ -182,8 +195,8 @@ export default function App() {
         </aside>
 
         <section className="lab-content">
-          <div className="field-banner" style={{ backgroundImage: `url(${fieldUrl})` }}>
-            <div className="field-banner-copy"><small>GROUNDED · {environmentLabel.toUpperCase()}</small><h1>Test tomorrow<br />before it arrives.</h1><p>Explore thousands of climate futures, understand why infrastructure fails, and prove which intervention survives.</p></div>
+          <div className="field-banner" style={{ backgroundImage: `url(${activeArtwork.url})`, backgroundPosition: activeArtwork.position }}>
+            <div className="field-banner-copy"><small>GROUNDED · {environmentLabel.toUpperCase()} · ILLUSTRATIVE ARTWORK</small><h1>Test tomorrow<br />before it arrives.</h1><p>Explore thousands of climate futures, understand why infrastructure fails, and prove which intervention survives.</p></div>
             <div className="field-banner-stats">
               <span><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span>
               <span><small>MODEL DEPTH</small><strong>72 hours · 15-minute steps</strong></span>

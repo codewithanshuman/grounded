@@ -15,13 +15,13 @@ import "./proof-path.css";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
 
-const WORKSPACE_META: Record<ViewId, { description: string; glyph: string }> = {
-  overview: { description: "Configure the system and expose it to a calibrated future.", glyph: "◫" },
-  matrix: { description: "Compare performance across every modeled climate regime.", glyph: "⌗" },
-  risk: { description: "Trace the exact timestep and mechanism behind each failure.", glyph: "△" },
-  optimizer: { description: "Search for the smallest intervention that survives holdouts.", glyph: "◇" },
-  compare: { description: "Replay identical futures to isolate intervention impact.", glyph: "≋" },
-  method: { description: "Inspect sources, assumptions, validation and model limits.", glyph: "◎" },
+const WORKSPACE_META: Record<ViewId, { description: string }> = {
+  overview: { description: "Configure the system and expose it to a calibrated future." },
+  matrix: { description: "Compare performance across every modeled climate regime." },
+  risk: { description: "Trace the exact timestep and mechanism behind each failure." },
+  optimizer: { description: "Search for the smallest intervention that survives holdouts." },
+  compare: { description: "Replay identical futures to isolate intervention impact." },
+  method: { description: "Inspect sources, assumptions, validation and model limits." },
 };
 
 const WORKSPACE_ART: Record<ViewId, { url: string; position: string }> = {
@@ -187,7 +187,7 @@ export default function App() {
               aria-current={activeView === id ? "page" : undefined}
               aria-label={label}
               className={activeView === id ? "active" : ""}
-            ><span aria-hidden="true">{index}</span><i aria-hidden="true">{WORKSPACE_META[id].glyph}</i><strong>{label}</strong></button>
+            ><span aria-hidden="true">{index}</span><strong>{label}</strong></button>
           ))}
         </nav>
         <div className="lab-status">

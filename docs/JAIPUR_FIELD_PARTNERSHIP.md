@@ -34,10 +34,15 @@ Public contact routes:
 
 - Aavas corporate office: 201–202 Southend Square, Mansarovar Industrial Area,
   Jaipur 302020; 0141-6618888; customercare@aavas.in.
-- Rajasthan Health Department Jaipur contact directory:
-  https://rajswasthya.rajasthan.gov.in/contact.php
+- SMS Hospital / RMRS public procurement contact: 0141-2518222,
+  0141-2560291, 0141-2518308; ms.smshospital@gmail.com and
+  cms.smshospital@gmail.com. Source:
+  https://diprfile.rajasthan.gov.in/nitRelease/9625/2024/9625.pdf
 - Gram Bharati Samiti: bskusum@gmail.com; 0141-2530719;
   https://gbsjaipur.org/about/
+- Rajasthan Renewable Energy Corporation is listed as Rajasthan's state nodal
+  agency at E-166 Yudhisthir Marg, C-Scheme, Jaipur, 0141-2229341:
+  https://www.recregistryindia.nic.in/index.php/publics/SNAList
 
 ## Data request
 
@@ -94,3 +99,7 @@ Grounded project team
 
 Use only the highest stage actually completed. Never describe outreach as a
 partnership.
+
+The machine-checkable intake contract, consent manifest, attestation and
+private-inbox procedure are in `validation/`. Run `pnpm validate:partner`
+before commissioning any received package.

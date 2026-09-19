@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "organizationName": "REPLACE WITH LEGAL ORGANIZATION NAME",
+  "facilityName": "REPLACE WITH FACILITY NAME",
+  "reviewerName": "REPLACE WITH NAMED REVIEWER",
+  "reviewerRole": "REPLACE WITH ROLE",
+  "reviewerOrganizationEmail": "REPLACE WITH ORGANIZATIONAL EMAIL",
+  "confirmedAt": "2026-09-19T12:00:00+05:30",
+  "timezone": "Asia/Kolkata",
+  "meterBoundary": "Describe what demand_kw includes and excludes",
+  "pvCapacityKW": 70,
+  "criticalLoadDefinition": "Describe the critical load and estimated kW",
+  "permissions": {
+    "analyzePrivately": true,
+    "publishDerivedProfile": false,
+    "nameOrganizationPublicly": false,
+    "publishRawTelemetry": false
+  },
+  "files": {
+    "demand": "demand.csv",
+    "pv": "pv.csv",
+    "outages": "outages.csv"
+  },
+  "notes": "Record gaps, meter resets, maintenance periods, daylight-saving assumptions, and known outages."
+}

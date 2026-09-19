@@ -5,6 +5,8 @@ the real emergency arrives.** It models a solar, battery, grid, hospital,
 homes, and EV microgrid; finds the exact chain that causes critical failure;
 and searches for a low-disruption intervention that survives the same future.
 
+Public verified demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
+
 ## Why it is different
 
 - **Climate-calibrated, operational-data digital twin** — NASA POWER monthly
@@ -121,6 +123,12 @@ The reference profile also has a blocked out-of-sample check: 72 demand days,
 duration KS drift. These metrics validate profile stability; they do not turn a
 cross-region reference into Jaipur commissioning data.
 
+Real Jaipur telemetry is accepted only through the private evidence workflow in
+`validation/`. A named reviewer, explicit permissions, meter boundary, 30-day
+interval coverage and file fingerprints are required before Grounded labels a
+profile commissioned. Run `pnpm validate:partner` against the private inbox;
+raw exports are ignored by Git and never belong in the public static build.
+
 A real Monte Carlo energy simulation for a solar+battery+grid microgrid, wrapped
 in a persistent **Resilience Forest**: every simulation you run plants a tree;
 every genuinely validated fix the optimizer finds grows a building. Nothing
@@ -161,6 +169,15 @@ pnpm build
 pnpm start                         # web + API + WebSocket on :8787
 docker compose up --build          # equivalent container rehearsal
 ```
+
+For the read-only Vercel/static showcase:
+
+```bash
+pnpm build:static
+```
+
+GitHub and Vercel release commands are documented in
+`docs/GITHUB_VERCEL_RUNBOOK.md`.
 
 `GET /api/health` is the deployment health check. See
 `docs/DEPLOYMENT.md` for persistence, origins and production boundaries.

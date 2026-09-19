@@ -11,3 +11,8 @@ playwright-report/
 .codex-hosting/
 .chart-data-*/
 submission/*.validation.json
+.vercel/
+.env*.local
+validation/inbox/*
+!validation/inbox/.gitkeep
+validation/reports/*.json

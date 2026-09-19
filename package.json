@@ -8,11 +8,14 @@
   },
   "scripts": {
     "build": "pnpm -r build",
+    "build:static": "node scripts/build-static.mjs",
     "dev": "pnpm --parallel --filter @verdant/server --filter @verdant/web dev",
     "start": "pnpm --filter @verdant/server start",
     "test": "pnpm -r --if-present test",
+    "test:partner": "node scripts/test-partner-validator.mjs",
     "test:e2e": "pnpm build && playwright test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "validate:partner": "node scripts/validate-partner-package.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.55.0",

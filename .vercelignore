@@ -1,0 +1,12 @@
+.git
+.github
+.openai
+.codex-artifacts
+.codex-hosting
+submission
+validation/inbox
+validation/reports
+test-results
+playwright-report
+*.db
+*.log

@@ -15,6 +15,15 @@ import "./proof-path.css";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
 
+const WORKSPACE_META: Record<ViewId, { description: string; glyph: string }> = {
+  overview: { description: "Configure the system and expose it to a calibrated future.", glyph: "◫" },
+  matrix: { description: "Compare performance across every modeled climate regime.", glyph: "⌗" },
+  risk: { description: "Trace the exact timestep and mechanism behind each failure.", glyph: "△" },
+  optimizer: { description: "Search for the smallest intervention that survives holdouts.", glyph: "◇" },
+  compare: { description: "Replay identical futures to isolate intervention impact.", glyph: "≋" },
+  method: { description: "Inspect sources, assumptions, validation and model limits.", glyph: "◎" },
+};
+
 const WORKSPACE_ART: Record<ViewId, { url: string; position: string }> = {
   overview: { url: fieldHomeUrl, position: "center 70%" },
   matrix: { url: monsoonUrl, position: "center 66%" },
@@ -163,11 +172,11 @@ export default function App() {
   const activeArtwork = WORKSPACE_ART[activeView];
 
   return (
-    <div className={`lab-shell ${isRunning ? "is-processing" : ""}`}>
+    <div className={`lab-shell view-${activeView} ${isRunning ? "is-processing" : ""}`}>
       <header className="lab-header">
         <div className="lab-brand">
-          <img src={logoUrl} alt="" />
-          <div><strong>Grounded</strong><span>Climate resilience laboratory</span></div>
+          <span className="brand-mark"><img src={logoUrl} alt="" /></span>
+          <div><small>FIELD INTELLIGENCE</small><strong>Grounded</strong><span>Climate resilience laboratory</span></div>
         </div>
         <nav className="lab-nav" aria-label="Analysis workspaces">
           {workspaces.map(({ id, label, index }) => (
@@ -176,37 +185,54 @@ export default function App() {
               onClick={() => setActiveView(id)}
               disabled={id === "matrix" && !climateSweep || (id === "risk" || id === "optimizer") && !baseline || id === "compare" && !optimized}
               aria-current={activeView === id ? "page" : undefined}
+              aria-label={label}
               className={activeView === id ? "active" : ""}
-            ><span>{index}</span>{label}</button>
+            ><span aria-hidden="true">{index}</span><i aria-hidden="true">{WORKSPACE_META[id].glyph}</i><strong>{label}</strong></button>
           ))}
         </nav>
         <div className="lab-status">
           <span className={connected ? "status-dot connected" : "status-dot"} />
-          <div><small>{executionMode.toUpperCase()}</small><strong>{connected ? "Connected" : "Reconnecting"}</strong></div>
+          <div><small>{executionMode.toUpperCase()}</small><strong>{connected ? "Systems online" : "Reconnecting"}</strong></div>
         </div>
       </header>
 
       <main className="lab-layout">
         <aside className="model-rail">
+          <div className="rail-topline"><span>CONFIGURATION DECK</span><b><i /> LIVE MODEL</b></div>
           <div className="rail-heading"><span>01</span><div><small>SYSTEM BLUEPRINT</small><h2>Build the microgrid</h2></div></div>
           <p className="rail-intro">Describe the energy system the community depends on. Every value directly changes the simulation.</p>
+          <div className="rail-summary" aria-label="Microgrid configuration summary">
+            <span><small>PV ARRAY</small><strong>{config.solarCapacityKW.toLocaleString()}</strong><em>kW</em></span>
+            <span><small>STORAGE</small><strong>{config.batteryCapacityKWh.toLocaleString()}</strong><em>kWh</em></span>
+            <span><small>CRITICAL</small><strong>{config.hospitalKW.toLocaleString()}</strong><em>kW</em></span>
+          </div>
           <div className="panel-surface twin-controls"><TwinPanel config={config} setConfigField={setConfigField} locationId={locationId} /></div>
           <div className="rail-note"><span>i</span><p><strong>Critical load comes first.</strong> The hospital always claims available solar, grid power and battery reserve before flexible demand.</p></div>
         </aside>
 
         <section className="lab-content">
           <div className="field-banner" style={{ backgroundImage: `url(${activeArtwork.url})`, backgroundPosition: activeArtwork.position }}>
-            <div className="field-banner-copy"><small>GROUNDED · {environmentLabel.toUpperCase()} · ILLUSTRATIVE ARTWORK</small><h1>Test tomorrow<br />before it arrives.</h1><p>Explore thousands of climate futures, understand why infrastructure fails, and prove which intervention survives.</p></div>
-            <div className="field-banner-stats">
-              <span><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span>
-              <span><small>MODEL DEPTH</small><strong>72 hours · 15-minute steps</strong></span>
-              <span><small>CLIMATE CALIBRATION</small><strong>{calibration ? `${calibration.source === "NASA_POWER" ? "NASA POWER" : "Reference"} · ${calibration.status}` : "Loading provenance…"}</strong></span>
-              <span><small>OPERATIONAL DATA</small><strong>{operationalDataLabel}</strong></span>
+            <div className="hero-grid" aria-hidden="true" />
+            <div className="field-banner-copy">
+              <div className="hero-kicker"><i /> GROUNDED FIELD LAB <span>/</span> {environmentLabel.toUpperCase()}</div>
+              <h1><span>Test tomorrow</span><br />before it arrives.</h1>
+              <p>Explore thousands of climate futures, expose the precise point of failure, and prove which intervention survives.</p>
+              <div className="hero-trust"><span>Deterministic</span><span>Auditable</span><span>Site-aware</span></div>
+            </div>
+            <div className="field-banner-evidence">
+              <div className="evidence-console-head"><span><i /> LIVE EVIDENCE CONSOLE</span><b>MODEL 01</b></div>
+              <div className="field-banner-stats">
+                <span><i>01</i><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span>
+                <span><i>02</i><small>MODEL DEPTH</small><strong>72 hours · 15-minute steps</strong></span>
+                <span><i>03</i><small>CLIMATE CALIBRATION</small><strong>{calibration ? `${calibration.source === "NASA_POWER" ? "NASA POWER" : "Reference"} · ${calibration.status}` : "Loading provenance…"}</strong></span>
+                <span><i>04</i><small>OPERATIONAL DATA</small><strong>{operationalDataLabel}</strong></span>
+              </div>
+              <div className="evidence-console-foot"><span>ILLUSTRATIVE FIELD ARTWORK</span><strong>72H / Δ15M</strong></div>
             </div>
           </div>
 
           <div className="workspace-toolbar">
-            <div><small>{workspaces.find((item) => item.id === activeView)?.index} · ACTIVE WORKSPACE</small><h2>{workspaces.find((item) => item.id === activeView)?.label}</h2></div>
+            <div className="workspace-title"><span>{workspaces.find((item) => item.id === activeView)?.index}</span><div><small>ACTIVE DECISION WORKSPACE</small><h2>{workspaces.find((item) => item.id === activeView)?.label}</h2><p>{WORKSPACE_META[activeView].description}</p></div></div>
             <div className="run-controls">
               <label><span>Region</span><select value={locationId} onChange={(e) => setLocationId(e.target.value as LocationId)}>{Object.values(LOCATIONS).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
               <label><span>Population</span><select value={scenarioCount} onChange={(e) => setScenarioCount(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} futures</option>)}</select></label>

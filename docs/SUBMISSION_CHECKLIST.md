@@ -11,7 +11,7 @@ retained artifact, live verification, or automated result.
       `ALLOWED_ORIGINS`, and verify `/api/health` separately.
 - [ ] If local site exports are available, commission them and archive their
       source fingerprint; otherwise retain the explicit reference-cohort label.
-- [ ] Send the prepared Jaipur outreach from a real team mailbox and retain the
+- [x] Send the prepared Jaipur outreach from a real team mailbox and retain the
       sent-message record.
 - [ ] Obtain a named reply before using `ACKNOWLEDGED`, `REVIEWED`, or
       `PARTNER` language.

@@ -3,7 +3,7 @@ import type { ClimateCalibration, ClimateSweepResult, LocationId, MicrogridConfi
 import { LOCATIONS, PRESETS, DEFAULT_CONFIG } from "@verdant/sim";
 import { useVerdant, type CommissionSiteInput, type OptimizeResponse } from "./ws/client";
 import { TwinPanel, StressPanel } from "./hud/ControlPanels";
-import logoUrl from "../../../assets/logo-ui.png";
+import logoUrl from "../../../assets/logo.png";
 import canopyUrl from "../../../assets/forest-canopy-ui.webp";
 import fieldHomeUrl from "../../../assets/grounded-field-home.png";
 import monsoonUrl from "../../../assets/grounded-monsoon.png";
@@ -175,7 +175,7 @@ export default function App() {
     <div className={`lab-shell view-${activeView} ${isRunning ? "is-processing" : ""}`}>
       <header className="lab-header">
         <div className="lab-brand">
-          <span className="brand-mark"><img src={logoUrl} alt="" /></span>
+          <span className="brand-mark"><img src={logoUrl} alt="Grounded" /></span>
           <div><small>FIELD INTELLIGENCE</small><strong>Grounded</strong><span>Climate resilience laboratory</span></div>
         </div>
         <nav className="lab-nav" aria-label="Analysis workspaces">

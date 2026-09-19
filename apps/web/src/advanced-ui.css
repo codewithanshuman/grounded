@@ -1357,6 +1357,24 @@ body {
   .lab-nav button > strong { font-size: 9px; }
 }
 
+/* Preserve the supplied gradient logo exactly—no recoloring or silhouette filter. */
+.brand-mark {
+  border-color: #c8d6c2;
+  background: linear-gradient(145deg, #fffef9, #eef4e9);
+  box-shadow: 0 12px 26px rgba(28, 71, 42, 0.14), inset 0 1px 0 #fff;
+}
+
+.lab-brand .brand-mark img {
+  width: 43px;
+  height: 43px;
+  object-fit: contain;
+  filter: none;
+}
+
+@media (max-width: 940px) {
+  .lab-brand .brand-mark img { width: 35px; height: 35px; }
+}
+
 @media (max-width: 1100px) {
   .lab-nav button { min-width: 76px; grid-template-columns: 24px minmax(0, 1fr); gap: 5px; padding-inline: 6px; justify-items: start; }
   .lab-nav button > span { width: 24px; height: 24px; border-radius: 8px; font-size: 6px; }

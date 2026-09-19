@@ -7,6 +7,10 @@ and searches for a low-disruption intervention that survives the same future.
 
 Public verified demo: https://grounded-jaipur-resilience.anshumanbahekar.chatgpt.site
 
+Vercel production mirror: https://grounded-peach.vercel.app
+
+Source: https://github.com/anshumanbahekar/grounded
+
 ## Why it is different
 
 - **Climate-calibrated, operational-data digital twin** — NASA POWER monthly

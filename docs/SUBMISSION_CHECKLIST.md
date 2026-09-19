@@ -5,8 +5,9 @@ retained artifact, live verification, or automated result.
 
 - [ ] Replace placeholder team/event metadata in the submission portal.
 - [x] Publish and smoke-test the read-only browser-engine demo over public HTTPS.
-- [ ] Push commit to `https://github.com/anshumanbahekar/grounded`.
-- [ ] Import the GitHub repository into Vercel and verify the generated URL.
+- [x] Push `main` to `https://github.com/anshumanbahekar/grounded`.
+- [x] Connect the GitHub repository to Vercel, deploy production, and verify
+      `https://grounded-peach.vercel.app` with the 500-future judge path.
 - [ ] If deploying the stateful server build, persist `/data`, configure
       `ALLOWED_ORIGINS`, and verify `/api/health` separately.
 - [ ] If local site exports are available, commission them and archive their

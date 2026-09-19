@@ -6,8 +6,8 @@ party can supply.
 | Gap | Size | Current state | Closure evidence |
 |---|---:|---|---|
 | Public working demo | Closed | Sites production URL verified with a 500-future run and clean console | Live URL and production smoke test |
-| GitHub source | Small | Local Git history exists; GitHub remote is not yet pushed | `main` visible at the requested repository and CI green |
-| Vercel deployment | Small | Configuration and static build are ready | Generated Vercel HTTPS URL passes judge path |
+| GitHub source | Closed | `main` is pushed to the requested public repository and Vercel is connected to it | GitHub repository and CI history |
+| Vercel deployment | Closed | Production is live at `https://grounded-peach.vercel.app`; 500-future extreme-event judge path and security headers verified | Stable HTTPS URL, 7/7 invariants and clean browser console |
 | Named Jaipur acknowledgment | External | SMS Hospital/RMRS, Aavas and Gram Bharati messages sent 2026-09-19; replies pending | Named reply retained from a traceable organizational route |
 | Community/technical review | External | Review protocol and attestation ready | Meeting note or written boundary confirmation |
 | Jaipur facility telemetry | External / large | Data contract, privacy boundary and validator ready; no export received | Authorized package passes `pnpm validate:partner` |

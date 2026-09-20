@@ -39,7 +39,9 @@ Source: https://github.com/anshumanbahekar/grounded
   independent 300-future discovery cohort, exposes the non-dominated Pareto
   frontier, then validates the winner on the original unseen population,
   three additional disjoint holdouts, exact paired McNemar inference, four
-  disclosed one-at-a-time shocks and an 81-cell compound stress envelope.
+  disclosed one-at-a-time shocks and an 81-cell compound stress envelope. The
+  Pareto finalists are independently reranked on every holdout so the UI
+  exposes recommendation rank, winner identity and maximum regret.
 - **Machine-audited dispatch** — every 15-minute step closes an explicit
   source-to-sink energy balance. Seven invariants verify conservation,
   classification totals, battery bounds, finite outputs, exact replay,
@@ -95,7 +97,7 @@ Source: https://github.com/anshumanbahekar/grounded
 4. Open **Optimizer** and run the search: point out 245 strategies across five
    hazards, the risk/energy/cost/carbon Pareto frontier, the independent discovery cohort,
    three holdouts, exact paired inference, the 81-cell compound stress envelope,
-   ablation benchmarks and dated historical-climate replay.
+   Pareto decision-stability ranks, ablation benchmarks and dated historical replay.
 5. Open **Method**: show the measured demand/PV curves, 9,210 historical outage
    records, restoration P50/P90/P95 and all three clickable source records.
 6. Open **Compare**: show the same seed failing in World A and surviving in

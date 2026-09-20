@@ -60,6 +60,8 @@ test("optimizer proves paired holdout safety and compound-stress stability", asy
   await expect(page.getByText("+20% restoration time")).toBeVisible();
   await expect(page.getByText("81-CELL COMPOUND STRESS ENVELOPE")).toBeVisible();
   await expect(page.getByText("DISCLOSED WORST CASE")).toBeVisible();
+  await expect(page.getByText("PARETO DECISION STABILITY")).toBeVisible();
+  await expect(page.getByText(/Rank \d+\/\d+/).first()).toBeVisible();
   await expect(page.getByText(/introduced/).first()).toBeVisible();
 });
 

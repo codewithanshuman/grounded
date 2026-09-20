@@ -110,7 +110,7 @@ function runOptimization(args: Record<string, unknown>) {
   const location = locationFromCalibration(locationWithSiteData(LOCATIONS[before.location], before.siteData), calibration);
   const analysis = analyzeInterventions(location, before.preset, before.config, 300, before.n, PRESET_ORDER);
   const intervention = analysis.best.intervention;
-  const validation = validateIntervention(location, before.config, intervention, before.n + 10_000, 200, PRESET_ORDER);
+  const validation = validateIntervention(location, before.config, intervention, before.n + 10_000, 200, PRESET_ORDER, analysis.frontier.map((candidate) => candidate.intervention));
   const mc = runMonteCarlo(before.n, location, before.preset, before.config, intervention);
   const after = toRunSummary(crypto.randomUUID(), mc, calibration, undefined, 0, before.siteData);
   runs.set(after.runId, after);

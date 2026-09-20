@@ -245,7 +245,7 @@ describe("optimizeIntervention", () => {
 
   it("reports disjoint optimizer holdouts and simple-policy benchmarks", () => {
     const search = analyzeInterventions(jaipur, "extreme", DEFAULT_CONFIG, 20, 900, ["normal", "heatwave", "storm", "evsurge", "extreme"]);
-    const validation = validateIntervention(jaipur, DEFAULT_CONFIG, search.best.intervention, 2000, 20);
+    const validation = validateIntervention(jaipur, DEFAULT_CONFIG, search.best.intervention, 2000, 20, undefined, search.frontier.map((candidate) => candidate.intervention));
     expect(validation.cohorts).toHaveLength(3);
     expect(new Set(validation.cohorts.map((cohort) => cohort.seedOffset)).size).toBe(3);
     expect(validation.benchmarks.map((item) => item.label)).toContain("Grounded policy");
@@ -262,5 +262,9 @@ describe("optimizeIntervention", () => {
     expect(validation.jointStressEnvelope.passingCells).toBeLessThanOrEqual(81);
     expect(validation.jointStressEnvelope.zeroRegressionCells).toBeLessThanOrEqual(81);
     expect(validation.jointStressEnvelope.worstCell.label.length).toBeGreaterThan(0);
+    expect(validation.decisionStability.candidateCount).toBeGreaterThan(1);
+    expect(validation.decisionStability.cohorts).toHaveLength(3);
+    expect(validation.decisionStability.cohorts.every((cohort) => cohort.recommendedRank >= 1 && cohort.recommendedRank <= cohort.candidateCount)).toBe(true);
+    expect(validation.decisionStability.maxRiskRegretPct).toBeGreaterThanOrEqual(0);
   }, 30000);
 });

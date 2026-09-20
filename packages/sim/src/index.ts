@@ -869,6 +869,28 @@ export interface JointStressEnvelope {
   worstCell: JointStressCell;
 }
 
+export interface DecisionStabilityCohort {
+  label: string;
+  seedOffset: number;
+  candidateCount: number;
+  recommendedRank: number;
+  winnerLabel: string;
+  recommendedRiskPct: number;
+  bestRiskPct: number;
+  riskRegretPct: number;
+}
+
+export interface DecisionStabilityAudit {
+  candidateCount: number;
+  cohortCount: number;
+  firstPlaceCohorts: number;
+  topThreeCohorts: number;
+  meanRank: number;
+  maxRiskRegretPct: number;
+  stable: boolean;
+  cohorts: DecisionStabilityCohort[];
+}
+
 export interface OptimizerValidation {
   cohortCount: number;
   passedCohorts: number;
@@ -881,6 +903,7 @@ export interface OptimizerValidation {
   zeroRegressionCohorts: number;
   statisticallyResolvedCohorts: number;
   jointStressEnvelope: JointStressEnvelope;
+  decisionStability: DecisionStabilityAudit;
 }
 
 /** Exact two-sided McNemar test over discordant paired outcomes. This asks
@@ -962,6 +985,31 @@ function evaluateAcrossHazards(
   };
 }
 
+function sameIntervention(left: Intervention, right: Intervention): boolean {
+  return left.reservePct === right.reservePct &&
+    left.evDelayMin === right.evDelayMin &&
+    left.precoolHour === right.precoolHour;
+}
+
+function interventionLabel(intervention: Intervention): string {
+  const precoolMinutes = intervention.precoolHour == null ? 0 : Math.round((intervention.precoolHour % 1) * 60);
+  const precool = intervention.precoolHour == null
+    ? "off"
+    : `${String(Math.floor(intervention.precoolHour)).padStart(2, "0")}:${String(precoolMinutes).padStart(2, "0")}`;
+  return `R${intervention.reservePct} · D${intervention.evDelayMin} · P${precool}`;
+}
+
+function rankCandidates(candidates: StrategyCandidate[]): StrategyCandidate[] {
+  return [...candidates].sort((left, right) =>
+    left.criticalCount - right.criticalCount ||
+    left.highCount - right.highCount ||
+    left.meanUnservedKWh - right.meanUnservedKWh ||
+    left.meanOperationalCost - right.meanOperationalCost ||
+    left.meanCarbonKg - right.meanCarbonKg ||
+    left.disruptionScore - right.disruptionScore,
+  );
+}
+
 /**
  * Evaluates the complete intervention grid and retains the non-dominated
  * risk/disruption frontier. This makes the recommendation auditable: callers
@@ -1029,6 +1077,7 @@ export function validateIntervention(
   seedOffset: number,
   sampleSize = 300,
   hazards: PresetId[] = PRESET_ORDER,
+  challengerInterventions: Intervention[] = [],
 ): OptimizerValidation {
   const cohorts: ValidationCohort[] = [];
   const stride = Math.ceil(sampleSize / hazards.length) + 17;
@@ -1158,6 +1207,46 @@ export function validateIntervention(
     minimumImprovementPct: worstCell.improvementPct,
     worstCell,
   };
+
+  const shortlist = [intervention, ...challengerInterventions]
+    .filter((candidate, index, all) => all.findIndex((other) => sameIntervention(candidate, other)) === index)
+    .slice(0, 12);
+  const decisionCohorts: DecisionStabilityCohort[] = cohorts.map((cohort) => {
+    const ranked = rankCandidates(shortlist.map((candidate) => evaluateAcrossHazards(
+      location,
+      config,
+      candidate,
+      sampleSize,
+      cohort.seedOffset,
+      hazards,
+    )));
+    const recommendedRank = ranked.findIndex((candidate) => sameIntervention(candidate.intervention, intervention)) + 1;
+    const recommended = ranked[recommendedRank - 1];
+    const winner = ranked[0];
+    return {
+      label: cohort.label,
+      seedOffset: cohort.seedOffset,
+      candidateCount: ranked.length,
+      recommendedRank,
+      winnerLabel: interventionLabel(winner.intervention),
+      recommendedRiskPct: recommended.riskPct,
+      bestRiskPct: winner.riskPct,
+      riskRegretPct: Math.round(Math.max(0, recommended.riskPct - winner.riskPct) * 10) / 10,
+    };
+  });
+  const firstPlaceCohorts = decisionCohorts.filter((cohort) => cohort.recommendedRank === 1).length;
+  const topThreeCohorts = decisionCohorts.filter((cohort) => cohort.recommendedRank <= 3).length;
+  const maxRiskRegretPct = Math.max(...decisionCohorts.map((cohort) => cohort.riskRegretPct));
+  const decisionStability: DecisionStabilityAudit = {
+    candidateCount: shortlist.length,
+    cohortCount: decisionCohorts.length,
+    firstPlaceCohorts,
+    topThreeCohorts,
+    meanRank: Math.round((decisionCohorts.reduce((sum, cohort) => sum + cohort.recommendedRank, 0) / decisionCohorts.length) * 10) / 10,
+    maxRiskRegretPct,
+    stable: topThreeCohorts === decisionCohorts.length && maxRiskRegretPct <= 1,
+    cohorts: decisionCohorts,
+  };
   const passedCohorts = cohorts.filter((cohort) => cohort.passed).length;
   return {
     cohortCount: cohorts.length,
@@ -1171,6 +1260,7 @@ export function validateIntervention(
     zeroRegressionCohorts: cohorts.filter((cohort) => cohort.introducedFailures === 0).length,
     statisticallyResolvedCohorts: cohorts.filter((cohort) => cohort.pairedPValue < 0.05).length,
     jointStressEnvelope,
+    decisionStability,
   };
 }
 

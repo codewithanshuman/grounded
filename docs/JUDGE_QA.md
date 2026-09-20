@@ -11,8 +11,17 @@ creates a separate `COMMISSIONED_SITE` profile.
 
 It cannot evaluate and validate on the same seeds. It searches 245 policies on
 an independent discovery cohort, then uses the original population, three
-disjoint holdouts, four assumption shocks and historical-climate replay. The
-before/after proof reuses the exact same failure seed.
+disjoint holdouts, exact paired inference, four single-factor shocks, an 81-cell
+compound stress envelope and historical-climate replay. It also reranks the
+Pareto finalists on every holdout and discloses rank and regret. The before/after
+proof reuses the exact same failure seed.
+
+## “Does the recommended policy always remain the best?”
+
+Grounded does not hide that uncertainty. It reruns every discovered Pareto
+finalist on three untouched cohorts and reports the chosen policy's rank, the
+winning alternative and maximum risk regret. This is shortlist stability—not a
+claim that every possible real-world control policy has been evaluated.
 
 ## “Are the results reproducible?”
 
@@ -37,4 +46,3 @@ protection and safety engineering.
 Climate calibration is cached, the operational profile is bundled, the engine
 runs locally, and the production container exposes a health check. Keep the
 backup video and screenshots specified in the demo runbook.
-

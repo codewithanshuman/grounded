@@ -40,17 +40,19 @@ and the full causal chain. A compact held-out ML surrogate reaches 1.000 AUROC,
 but it is diagnostic only. Exact physics remains the authority, and seven of
 seven machine invariants pass.”
 
-## 2:40–3:30 — Slide 5: proof against overfitting
+## 2:40–3:35 — Slide 5: proof against overfitting
 
 “Grounded exhaustively searches 245 reserve, EV-delay and pre-cooling policies
 across five hazards on an independent 300-future cohort. The selected policy—20
 percent reserve, 180-minute EV delay and 11 a.m. pre-cooling—takes the original
 500-future baseline from 15 critical failures to zero. It then passes three
-disjoint holdouts, four assumption shocks, and prevents seven holdout failures
-without introducing one. Same seeds before and after mean the policy cannot win
-by getting an easier scenario.”
+disjoint holdouts with exact paired inference, four one-at-a-time shocks and an
+81-cell compound envelope varying restoration time, demand, solar and starting
+battery charge together. Grounded also reranks every Pareto finalist on each
+holdout and discloses the winner, selected-policy rank and regret. Same seeds
+before and after mean the policy cannot win by receiving an easier scenario.”
 
-## 3:30–4:05 — Slide 6: the collaboration truth
+## 3:35–4:05 — Slide 6: the collaboration truth
 
 “We are at the public-evidence and outreach-ready stage. We have a named Jaipur
 facility, a source-checked field assessment, a minimum data contract and a
@@ -72,8 +74,8 @@ a promise into a test. Make Jaipur’s next outage boring.”
 Hospital assessment documents 70 kWp of solar, about 80 percent demand coverage
 and a reported bill drop from ₹90,000 to ₹40,000—but not interval telemetry.
 Grounded fills the decision gap: 500 deterministic 72-hour futures at 15-minute
-resolution, an exact failure chain, and a 245-policy search. In the verified
-extreme run, 15 critical failures fall to zero; the policy passes three disjoint
-holdouts and four assumption shocks. We do not claim a partnership yet. We are
-asking for a named reviewer and 30 days of demand, PV and outage exports to
-commission the Jaipur twin.”
+resolution, an exact failure chain, and a 245-policy search. Its recommendation
+is challenged on three holdouts, exact paired statistics, an 81-case compound
+stress envelope and independent Pareto reranking. We do not claim a partnership
+yet. We are asking for a named reviewer and 30 days of demand, PV and outage
+exports to commission the Jaipur twin.”

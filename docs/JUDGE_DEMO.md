@@ -47,6 +47,8 @@ Open **Strategy**, run the optimizer, and point out:
 - 245 disclosed strategies across five hazards;
 - independent 300-future discovery cohort;
 - three disjoint holdouts and four assumption shocks;
+- exact paired p-values and the 81-cell compound stress envelope;
+- Pareto finalist reranking, selected-policy rank and maximum regret;
 - the Pareto frontier across risk, energy, disruption, cost and carbon;
 - dated NASA climate replay.
 
@@ -73,5 +75,5 @@ End with: â€œGrounded turns resilience from a promise into a reproducible test.â
 1. Show Method fingerprints and holdout PASS.
 2. Show a prepared Extreme run with 7/7 checks and the ML holdout audit.
 3. Show the failure chain.
-4. Show same-seed before/after proof.
-5. End on the commissioning panel.
+4. Show the 81-cell envelope and Pareto rank audit.
+5. Show same-seed before/after proof and end on commissioning.

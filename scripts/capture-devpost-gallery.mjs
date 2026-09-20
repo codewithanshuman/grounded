@@ -7,7 +7,7 @@ const outputDir = resolve("docs/devpost-media");
 await mkdir(outputDir, { recursive: true });
 
 const browser = await chromium.launch({ headless: true });
-const page = await browser.newPage({ viewport: { width: 1500, height: 1000 }, deviceScaleFactor: 1 });
+const page = await browser.newPage({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
 page.setDefaultTimeout(90_000);
 
 async function settle() {
@@ -21,6 +21,10 @@ async function settle() {
     });
   });
   await page.waitForTimeout(350);
+}
+
+async function waitForToastToClear() {
+  await page.locator(".light-toast").waitFor({ state: "hidden", timeout: 10_000 }).catch(() => undefined);
 }
 
 async function capture(name, target) {
@@ -63,6 +67,7 @@ try {
   await page.getByRole("button", { name: /Extreme Combined Event/ }).click();
   await page.getByRole("button", { name: /RUN SIMULATION/ }).click();
   await page.getByText("7/7 invariants passed").waitFor({ state: "visible", timeout: 120_000 });
+  await waitForToastToClear();
   await capture("04-risk-forensics", page.locator(".analysis-card"));
   await capture("05-statistical-reliability", page.locator(".statistical-depth"));
   await capture("06-interpretable-ml-audit", page.locator(".surrogate-card"));
@@ -75,6 +80,7 @@ try {
   await page.getByRole("button", { name: "Strategy" }).click();
   await page.getByRole("button", { name: "Run optimizer", exact: true }).click();
   await page.getByRole("heading", { name: "Same future. Better outcome." }).waitFor({ state: "visible", timeout: 180_000 });
+  await waitForToastToClear();
   await capture("11-same-seed-counterfactual", page.locator(".analysis-card"));
 
   await page.getByRole("button", { name: "Strategy" }).click();

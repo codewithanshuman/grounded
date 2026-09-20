@@ -1,8 +1,8 @@
 # Devpost image gallery
 
-All images are upload-ready JPEG files at **1500 × 1000 pixels (3:2)** and are
-well below Devpost's 5 MB limit. Upload them in filename order. Use the first
-image as the gallery cover.
+All images are upload-ready full-HD JPEG files at **1920 × 1080 pixels (16:9)**
+and are well below Devpost's 5 MB limit. Upload them in filename order. Use the
+first image as the gallery cover.
 
 1. **Grounded — test tomorrow before it arrives**  
    A climate-resilience laboratory for testing critical infrastructure before an emergency.

@@ -30,10 +30,10 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
       parent: containerRef.current,
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
-      backgroundColor: "#e7ede0",
+      backgroundColor: "#217fb5",
       scene: [ForestScene],
       scale: { mode: Phaser.Scale.RESIZE },
-      render: { antialias: true },
+      render: { antialias: false, pixelArt: true, roundPixels: true },
     });
     gameRef.current = game;
 

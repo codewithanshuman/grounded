@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import { WORLD_TEXTURES } from "./textures";
 
 export type ForestActivity = "simulation" | "optimization" | "climate" | null;
 
@@ -37,8 +38,8 @@ export class LiveConstruction {
     const copy = ACTIVITY_COPY[activity];
     const site = this.createSite(x, y, depth, copy.eyebrow, copy.title, true);
     this.activitySite = site;
-    site.container.setAlpha(0).setScale(0.92);
-    this.scene.tweens.add({ targets: site.container, alpha: 1, scale: 1, duration: 420, ease: "Back.Out" });
+    site.container.setAlpha(0).setScale(0.96);
+    this.scene.tweens.add({ targets: site.container, alpha: 1, scale: 1.12, duration: 420, ease: "Back.Out" });
   }
 
   completeBuilding(
@@ -55,7 +56,7 @@ export class LiveConstruction {
     }
 
     const site = this.createSite(x, y, depth + 0.65, "VERIFIED BUILD", "Assembling resilience", false);
-    const scaffold = site.container.getByName("scaffold") as Phaser.GameObjects.Graphics;
+    const scaffold = site.container.getByName("scaffold") as Phaser.GameObjects.Container;
     const crane = site.container.getByName("crane") as Phaser.GameObjects.Container;
     scaffold.setScale(1, 0.04).setAlpha(0.25);
     crane.setScale(1, 0.08).setAlpha(0);
@@ -120,59 +121,42 @@ export class LiveConstruction {
       new Phaser.Geom.Point(47, -1), new Phaser.Geom.Point(0, -21),
     ], true);
 
-    const scaffold = this.scene.add.graphics().setName("scaffold");
-    scaffold.lineStyle(2, 0x6d795f, 0.9);
-    for (const sx of [-31, -10, 11, 32]) scaffold.lineBetween(sx, 1, sx, -55);
-    for (const sy of [-1, -19, -37, -55]) scaffold.lineBetween(-34, sy, 35, sy);
-    scaffold.lineStyle(1, 0xa88a55, 0.8);
-    scaffold.lineBetween(-31, -1, -10, -19);
-    scaffold.lineBetween(-10, -19, 11, -1);
-    scaffold.lineBetween(11, -1, 32, -19);
+    const scaffoldImage = this.scene.add.image(0, 8, WORLD_TEXTURES.scaffold).setOrigin(0.5, 1).setScale(0.86);
+    const scaffold = this.scene.add.container(0, 0, [scaffoldImage]).setName("scaffold");
+    const craneImage = this.scene.add.image(12, 10, WORLD_TEXTURES.crane).setOrigin(0.5, 1).setScale(0.78);
+    const crane = this.scene.add.container(0, 0, [craneImage]).setName("crane");
 
-    const mast = this.scene.add.rectangle(-43, 0, 5, 91, 0xc99a39).setOrigin(0.5, 1);
-    const jib = this.scene.add.rectangle(-7, -88, 78, 5, 0xe2b84f).setOrigin(0.5);
-    const counter = this.scene.add.rectangle(-49, -86, 14, 11, 0x6d5631);
-    const cabin = this.scene.add.rectangle(-37, -67, 15, 13, 0x55794c).setStrokeStyle(1, 0xf4f0d8, 0.55);
-    const cable = this.scene.add.rectangle(23, -84, 1, 46, 0x39483b, 0.75).setOrigin(0.5, 0);
-    const hook = this.scene.add.circle(23, -36, 3, 0xd99931).setStrokeStyle(1, 0x654e2a);
-    const crane = this.scene.add.container(0, 0, [mast, jib, counter, cabin, cable, hook]).setName("crane");
-
-    const workerA = this.makeWorker(-18, 0, 0x456f4a);
-    const workerB = this.makeWorker(18, 4, 0x916b48);
+    const workerA = this.scene.add.image(-31, 8, "crew-worker").setOrigin(0.5, 1).setScale(0.16);
+    const workerB = this.scene.add.image(29, 7, "crew-architect").setOrigin(0.5, 1).setScale(0.15).setFlipX(true);
+    const runner = this.scene.add.image(4, 12, "crew-runner").setOrigin(0.5, 1).setScale(0.105);
 
     const plate = this.scene.add.graphics();
     plate.fillStyle(0x173d29, 0.94);
-    plate.fillRoundedRect(-72, -130, 144, 34, 8);
+    plate.fillRoundedRect(-78, -230, 156, 37, 7);
     plate.lineStyle(1, 0xc6dd9a, 0.42);
-    plate.strokeRoundedRect(-72, -130, 144, 34, 8);
-    const label = this.scene.add.text(-62, -124, eyebrow, {
+    plate.strokeRoundedRect(-78, -230, 156, 37, 7);
+    const label = this.scene.add.text(-67, -224, eyebrow, {
       fontFamily: "IBM Plex Mono, monospace", fontSize: "7px", color: "#b7df72", fontStyle: "bold",
     });
-    const detail = this.scene.add.text(-62, -113, title, {
+    const detail = this.scene.add.text(-67, -212, title, {
       fontFamily: "Manrope, sans-serif", fontSize: "9px", color: "#f6f7ec", fontStyle: "bold",
     });
-    const barTrack = this.scene.add.rectangle(-62, -101, 124, 2, 0xffffff, 0.17).setOrigin(0, 0.5);
-    const bar = this.scene.add.rectangle(-62, -101, 124, 2, 0xb7df72, 0.9).setOrigin(0, 0.5).setScale(0.18, 1);
+    const barTrack = this.scene.add.rectangle(-67, -198, 134, 2, 0xffffff, 0.17).setOrigin(0, 0.5);
+    const bar = this.scene.add.rectangle(-67, -198, 134, 2, 0xb7df72, 0.9).setOrigin(0, 0.5).setScale(0.18, 1);
 
-    const container = this.scene.add.container(x, y, [footprint, scaffold, crane, workerA, workerB, plate, label, detail, barTrack, bar]);
+    const container = this.scene.add.container(x, y, [footprint, scaffold, crane, workerA, workerB, runner, plate, label, detail, barTrack, bar]);
     container.setDepth(depth);
 
     const loops = [
-      this.scene.tweens.add({ targets: [cable, hook], y: "+=12", duration: 820, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
       this.scene.tweens.add({ targets: workerA, y: "-=3", duration: 540, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
       this.scene.tweens.add({ targets: workerB, y: "-=2", duration: 670, yoyo: true, repeat: -1, ease: "Sine.InOut", delay: 140 }),
+      this.scene.tweens.add({ targets: runner, x: "+=18", duration: 980, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
+      this.scene.tweens.add({ targets: craneImage, y: "+=2", duration: 1100, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
     ];
     if (looping) {
       loops.push(this.scene.tweens.add({ targets: bar, scaleX: 0.92, duration: 1700, yoyo: true, repeat: -1, ease: "Sine.InOut" }));
     }
     return { container, label, detail, bar, loops };
-  }
-
-  private makeWorker(x: number, y: number, color: number): Phaser.GameObjects.Container {
-    const body = this.scene.add.rectangle(0, -7, 5, 10, color).setOrigin(0.5, 1);
-    const head = this.scene.add.circle(0, -20, 3.1, 0xb98059);
-    const helmet = this.scene.add.arc(0, -21, 3.5, 180, 360, false, 0xe7c34b);
-    return this.scene.add.container(x, y, [body, head, helmet]);
   }
 
   private makeDust(x: number, y: number, depth: number): void {

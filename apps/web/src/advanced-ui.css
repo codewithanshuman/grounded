@@ -707,11 +707,9 @@ body {
 
 .light-world {
   position: relative;
-  height: 430px;
+  height: 520px;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(143, 174, 111, 0.15), transparent 40%),
-    #e6ecdf;
+  background: linear-gradient(180deg, #2e9fe0, #217fb5);
 }
 
 .world-live-state {
@@ -725,8 +723,8 @@ body {
   gap: 9px;
   border: 1px solid rgba(71, 108, 67, 0.18);
   border-radius: 11px;
-  color: #284b32;
-  background: rgba(255, 254, 249, 0.88);
+  color: #f7fbff;
+  background: rgba(8, 48, 65, 0.88);
   box-shadow: 0 8px 22px rgba(28, 52, 35, 0.09);
   backdrop-filter: blur(10px);
   pointer-events: none;
@@ -739,7 +737,7 @@ body {
   box-shadow: 0 0 0 5px rgba(118, 164, 84, 0.13);
 }
 .world-live-state > span { display: flex; flex-direction: column; gap: 3px; }
-.world-live-state small { color: #78906e; font: 600 6px/1 IBM Plex Mono, monospace; letter-spacing: .12em; }
+.world-live-state small { color: #9fd8f5; font: 600 6px/1 IBM Plex Mono, monospace; letter-spacing: .12em; }
 .world-live-state strong { font-size: 8px; font-weight: 650; }
 .world-live-state.working { border-color: rgba(191, 145, 54, 0.28); color: #624d27; }
 .world-live-state.working > i { background: #d0a03f; box-shadow: 0 0 0 5px rgba(208, 160, 63, 0.14); animation: worldPulse 1.25s ease-in-out infinite; }

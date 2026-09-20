@@ -26,6 +26,12 @@ export const WORLD_TEXTURES = {
   substation: "world-substation",
   home: "world-home",
   serviceVan: "world-service-van",
+  bridge: "world-forest-bridge",
+  wetland: "world-forest-wetland",
+  forestCabin: "world-forest-cabin",
+  forestSensor: "world-forest-sensor",
+  lighthouse: "world-lighthouse",
+  trafficCars: ["world-car-0", "world-car-1", "world-car-2", "world-car-3"],
   cityHouse: "world-city-house",
   cityTownhouse: "world-city-townhouse",
   cityOffice: "world-city-office",
@@ -37,6 +43,7 @@ export const WORLD_TEXTURES = {
 
 export type WorldRoadClass = "boulevard" | "street" | "lane";
 export const roadTextureKey = (mask: number, roadClass: WorldRoadClass): string => `world-road-${roadClass}-${mask}`;
+export const trailTextureKey = (mask: number): string => `world-forest-trail-${mask}`;
 
 const TERRAIN = {
   grass: [0x5bbf3e, 0x54b638, 0x63c748],
@@ -86,8 +93,10 @@ function finish(g: Phaser.GameObjects.Graphics, key: string, width: number, heig
 export function bakeTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(WORLD_TEXTURES.water[0])) return;
   bakeTerrain(scene);
+  bakeReserveTextures(scene);
   bakeProps(scene);
   bakeInfrastructure(scene);
+  bakeTraffic(scene);
   bakeCityStructures(scene);
   bakeTrees(scene);
   bakeBuildings(scene);
@@ -175,6 +184,99 @@ function bakeRoadTile(scene: Phaser.Scene, mask: number, roadClass: WorldRoadCla
     }
   }
   finish(g, roadTextureKey(mask, roadClass), HALF_W * 2, HALF_H * 2);
+}
+
+function bakeReserveTextures(scene: Phaser.Scene): void {
+  for (let mask = 0; mask < 16; mask++) {
+    const g = graphics(scene);
+    isoFace(g, TERRAIN.grass[2]!, 1, isoDiamond(.5));
+    const arms: Array<[number, Point3[]]> = [
+      [1, roadBand(-.5, -.13, "v", .13)],
+      [2, roadBand(.13, .5, "u", .13)],
+      [4, roadBand(.13, .5, "v", .13)],
+      [8, roadBand(-.5, -.13, "u", .13)],
+    ];
+    isoFace(g, 0xb99b68, 1, isoDiamond(.13));
+    arms.forEach(([bit, points]) => { if (mask & bit) isoFace(g, 0xb99b68, 1, points); });
+    isoStroke(g, 0xe4d2a8, .72, 1, isoDiamond(.13));
+    finish(g, trailTextureKey(mask), HALF_W * 2, HALF_H * 2);
+  }
+
+  {
+    const g = graphics(scene);
+    const deck = roadBand(-.5, .5, "u", .24);
+    const under = roadBand(-.5, .5, "u", .31);
+    isoFace(g, 0x344b49, .92, under);
+    isoFace(g, 0x8d724b, 1, deck);
+    for (const offset of [-.22, -.07, .08, .23]) {
+      const a = isoAt([-.5, offset, 1]); const b = isoAt([.5, offset, 1]);
+      g.lineStyle(offset === -.22 || offset === .23 ? 2 : 1, offset === -.22 || offset === .23 ? 0xd8c69a : 0xb19566, .94);
+      g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    for (const u of [-.42, 0, .42]) {
+      for (const v of [-.29, .29]) {
+        const foot = isoAt([u, v, 0]); const top = isoAt([u, v, 13]);
+        g.lineStyle(2, 0x35504a, 1); g.lineBetween(foot.x, foot.y, top.x, top.y);
+      }
+    }
+    finish(g, WORLD_TEXTURES.bridge, HALF_W * 2, HALF_H * 2);
+  }
+
+  {
+    const g = graphics(scene);
+    isoFace(g, TERRAIN.grass[1]!, 1, isoDiamond(.5));
+    g.fillStyle(0x2f91b4, .9); g.fillEllipse(HALF_W, HALF_H + 2, 68, 24);
+    g.lineStyle(2, 0x8bcbb0, .82); g.strokeEllipse(HALF_W, HALF_H + 2, 69, 25);
+    g.fillStyle(0x86b84c, .9);
+    for (const x of [20, 29, 68, 77]) { g.fillRect(x, 20, 2, 13); g.fillTriangle(x - 3, 21, x + 4, 21, x + 1, 14); }
+    finish(g, WORLD_TEXTURES.wetland, HALF_W * 2, HALF_H * 2);
+  }
+
+  {
+    const g = graphics(scene); const x = 66, ground = 116;
+    g.fillStyle(0x173b2d, .24); g.fillEllipse(x, ground, 94, 18);
+    g.fillStyle(0xa67d4e, 1); g.fillPoints([new Phaser.Geom.Point(28, 70), new Phaser.Geom.Point(x, 89), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(28, 97)], true);
+    g.fillStyle(0xd9d2ae, 1); g.fillPoints([new Phaser.Geom.Point(104, 70), new Phaser.Geom.Point(x, 89), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(104, 97)], true);
+    g.fillStyle(0x315e3d, 1); g.fillPoints([new Phaser.Geom.Point(x, 44), new Phaser.Geom.Point(108, 67), new Phaser.Geom.Point(x, 91), new Phaser.Geom.Point(24, 67)], true);
+    g.fillStyle(0x183e67, 1); g.fillPoints([new Phaser.Geom.Point(67, 48), new Phaser.Geom.Point(91, 61), new Phaser.Geom.Point(76, 69), new Phaser.Geom.Point(52, 56)], true);
+    g.lineStyle(1, 0x78b9df, .9); g.lineBetween(64, 54, 80, 63); g.lineBetween(70, 51, 86, 60);
+    g.fillStyle(0x6aa8c2, 1); g.fillRect(78, 91, 12, 10); g.fillStyle(0x5c412b, 1); g.fillRect(43, 90, 13, 26);
+    finish(g, WORLD_TEXTURES.forestCabin, 132, 128);
+  }
+
+  {
+    const g = graphics(scene); const x = 45, ground = 103;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(x, ground, 48, 11);
+    g.lineStyle(3, 0x455c56, 1); g.lineBetween(x, ground, x, 29); g.lineBetween(x - 15, 47, x + 15, 47);
+    g.fillStyle(0xe9f2e5, 1); g.fillRoundedRect(x - 12, 62, 24, 18, 3); g.fillStyle(0x72a952, 1); g.fillCircle(x, 70, 4);
+    g.lineStyle(2, 0x455c56, 1); g.strokeCircle(x - 16, 34, 5); g.strokeCircle(x, 29, 5); g.strokeCircle(x + 16, 34, 5);
+    g.lineBetween(x - 11, 34, x - 1, 30); g.lineBetween(x + 1, 30, x + 11, 34);
+    g.fillStyle(0xd4a43f, 1); g.fillTriangle(x, 20, x + 9, 24, x, 27);
+    finish(g, WORLD_TEXTURES.forestSensor, 90, 112);
+  }
+
+  {
+    const g = graphics(scene); const x = 50, ground = 148;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(x, ground, 72, 16);
+    g.fillStyle(0xc8b894, 1); g.fillEllipse(x, ground - 7, 52, 16); g.fillRect(x - 26, ground - 31, 52, 24);
+    g.fillStyle(0xf2efe2, 1); g.fillPoints([new Phaser.Geom.Point(x - 16, ground - 28), new Phaser.Geom.Point(x + 17, ground - 28), new Phaser.Geom.Point(x + 10, 48), new Phaser.Geom.Point(x - 9, 48)], true);
+    g.fillStyle(0xd95645, 1); for (let y = 57; y < ground - 31; y += 25) g.fillRect(x - 11, y, 24, 10);
+    g.fillStyle(0x315e4a, 1); g.fillRect(x - 16, 41, 33, 9); g.fillStyle(0xf5d35d, .28); g.fillCircle(x, 33, 13); g.fillStyle(0xf5d35d, 1); g.fillCircle(x, 33, 5);
+    finish(g, WORLD_TEXTURES.lighthouse, 100, 160);
+  }
+}
+
+function bakeTraffic(scene: Phaser.Scene): void {
+  const colors = [0xe35d45, 0x2f79aa, 0xe6b649, 0xf3f0dc];
+  WORLD_TEXTURES.trafficCars.forEach((key, index) => {
+    const g = graphics(scene); const color = colors[index]!;
+    g.fillStyle(0x173b2d, .22); g.fillEllipse(35, 35, 43, 9);
+    g.fillStyle(shade(color, -22), 1); g.fillPoints([new Phaser.Geom.Point(14, 22), new Phaser.Geom.Point(36, 31), new Phaser.Geom.Point(57, 21), new Phaser.Geom.Point(35, 13)], true);
+    g.fillStyle(color, 1); g.fillPoints([new Phaser.Geom.Point(20, 16), new Phaser.Geom.Point(37, 23), new Phaser.Geom.Point(52, 16), new Phaser.Geom.Point(35, 9)], true);
+    g.fillStyle(0xa9d9ee, .92); g.fillPoints([new Phaser.Geom.Point(26, 15), new Phaser.Geom.Point(36, 19), new Phaser.Geom.Point(44, 15), new Phaser.Geom.Point(35, 11)], true);
+    g.fillStyle(0x273334, 1); g.fillCircle(24, 29, 4); g.fillCircle(48, 25, 4);
+    finish(g, key, 70, 44);
+  });
 }
 
 function bakeProps(scene: Phaser.Scene): void {

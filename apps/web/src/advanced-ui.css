@@ -765,6 +765,7 @@ body {
 .world-map-key i { width: 6px; height: 6px; display: inline-block; border-radius: 50%; }
 .world-map-key .solar { background: #d8ff81; box-shadow: 0 0 7px rgba(216,255,129,.72); }
 .world-map-key .context { background: #a7e7ff; }
+.world-map-key .reserve { background: #8fc96a; box-shadow: 0 0 7px rgba(143,201,106,.52); }
 .world-map-key .verified { background: #67c75d; }
 .world-live-state > i {
   width: 8px;

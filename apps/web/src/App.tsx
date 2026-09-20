@@ -255,8 +255,8 @@ export default function App() {
                 <div className="light-world">
                   <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} /></Suspense>
                   <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
-                  <div className="world-map-id"><span>JAIPUR RESILIENCE TWIN</span><b>ISO 24 × 24</b></div>
-                  <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="verified" />Verified growth</span></div>
+                  <div className="world-map-id"><span>JAIPUR CITY + CANOPY TWIN</span><b>CONNECTED SYSTEM</b></div>
+                  <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="reserve" />Forest reserve</span><span><i className="verified" />Verified growth</span></div>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
                     <small>{forestInspection.status}</small>

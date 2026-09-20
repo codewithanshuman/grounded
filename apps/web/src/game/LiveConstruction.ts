@@ -126,6 +126,21 @@ export class LiveConstruction {
     const craneImage = this.scene.add.image(12, 10, WORLD_TEXTURES.crane).setOrigin(0.5, 1).setScale(0.78);
     const crane = this.scene.add.container(0, 0, [craneImage]).setName("crane");
 
+    const siteWorks = this.scene.add.graphics();
+    siteWorks.fillStyle(0xd9c9a4, .78); siteWorks.fillPoints([
+      new Phaser.Geom.Point(-42, 10), new Phaser.Geom.Point(-6, 24), new Phaser.Geom.Point(35, 7), new Phaser.Geom.Point(-1, -8),
+    ], true);
+    siteWorks.lineStyle(2, 0xe6b84c, .95);
+    for (const x of [-45, -25, 33, 49]) { siteWorks.lineBetween(x, 7, x, -10); siteWorks.lineBetween(x - 4, -8, x + 4, -8); }
+    siteWorks.fillStyle(0x4f695e, 1); siteWorks.fillRect(35, -1, 24, 6); siteWorks.fillStyle(0xb8874f, 1); siteWorks.fillRect(38, -7, 18, 6);
+
+    const cable = this.scene.add.rectangle(-50, -153, 2, 52, 0x34423e, .92).setOrigin(.5, 0);
+    const hookGraphic = this.scene.add.graphics();
+    hookGraphic.lineStyle(2, 0x313c3a, 1); hookGraphic.lineBetween(0, 0, 0, 8); hookGraphic.strokeCircle(0, 12, 5);
+    hookGraphic.lineBetween(-13, 18, 13, 18); hookGraphic.lineBetween(-13, 18, -8, 24); hookGraphic.lineBetween(13, 18, 8, 24);
+    hookGraphic.fillStyle(0x66766f, 1); hookGraphic.fillRect(-15, 24, 30, 11); hookGraphic.fillStyle(0xc4d2c9, 1); hookGraphic.fillRect(-11, 26, 22, 6);
+    const hook = this.scene.add.container(-50, -101, [hookGraphic]);
+
     const workerA = this.scene.add.image(-31, 8, "crew-worker").setOrigin(0.5, 1).setScale(0.21);
     const workerB = this.scene.add.image(29, 7, "crew-architect").setOrigin(0.5, 1).setScale(0.2).setFlipX(true);
     const runner = this.scene.add.image(4, 12, "crew-runner").setOrigin(0.5, 1).setScale(0.14);
@@ -144,7 +159,7 @@ export class LiveConstruction {
     const barTrack = this.scene.add.rectangle(-67, -198, 134, 2, 0xffffff, 0.17).setOrigin(0, 0.5);
     const bar = this.scene.add.rectangle(-67, -198, 134, 2, 0xb7df72, 0.9).setOrigin(0, 0.5).setScale(0.18, 1);
 
-    const container = this.scene.add.container(x, y, [footprint, scaffold, crane, workerA, workerB, runner, plate, label, detail, barTrack, bar]);
+    const container = this.scene.add.container(x, y, [footprint, siteWorks, scaffold, crane, cable, hook, workerA, workerB, runner, plate, label, detail, barTrack, bar]);
     container.setDepth(depth);
 
     const loops = [
@@ -152,6 +167,10 @@ export class LiveConstruction {
       this.scene.tweens.add({ targets: workerB, y: "-=2", duration: 670, yoyo: true, repeat: -1, ease: "Sine.InOut", delay: 140 }),
       this.scene.tweens.add({ targets: runner, x: "+=18", duration: 980, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
       this.scene.tweens.add({ targets: craneImage, y: "+=2", duration: 1100, yoyo: true, repeat: -1, ease: "Sine.InOut" }),
+      this.scene.tweens.add({
+        targets: hook, y: "+=43", duration: 2600, yoyo: true, repeat: -1, ease: "Sine.InOut",
+        onUpdate: () => cable.setDisplaySize(2, Math.max(4, hook.y - cable.y)),
+      }),
     ];
     if (looping) {
       loops.push(this.scene.tweens.add({ targets: bar, scaleX: 0.92, duration: 1700, yoyo: true, repeat: -1, ease: "Sine.InOut" }));

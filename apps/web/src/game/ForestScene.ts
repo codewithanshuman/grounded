@@ -1,9 +1,19 @@
 import Phaser from "phaser";
 import { FOREST_GRID_SIZE, toScreen, depthOf } from "./iso";
 import { bakeTextures } from "./textures";
+import { LiveConstruction, type ForestActivity } from "./LiveConstruction";
 import type { Building, GrowthEvent, Tree, WorldState } from "@verdant/protocol";
 
 export const FOREST_READY_EVENT = "forest-ready";
+
+export type ForestInspection = {
+  kind: "tree" | "building";
+  title: string;
+  status: string;
+  evidence: string;
+  runId: string;
+  occurredAt: number;
+};
 
 export class ForestScene extends Phaser.Scene {
   private world: Phaser.GameObjects.Container | null = null;
@@ -11,6 +21,8 @@ export class ForestScene extends Phaser.Scene {
   private isDragging = false;
   private dragStart = { x: 0, y: 0 };
   private camStart = { x: 0, y: 0 };
+  private construction: LiveConstruction | null = null;
+  private inspectHandler: ((inspection: ForestInspection) => void) | null = null;
 
   constructor() {
     super("ForestScene");
@@ -18,6 +30,7 @@ export class ForestScene extends Phaser.Scene {
 
   create(): void {
     bakeTextures(this);
+    this.construction = new LiveConstruction(this);
     this.world = this.add.container(0, 0);
     this.drawGround();
 
@@ -40,7 +53,18 @@ export class ForestScene extends Phaser.Scene {
       cam.zoom = Phaser.Math.Clamp(cam.zoom - dy * 0.0006, 0.4, 1.8);
     });
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.construction?.destroy());
+
     this.game.events.emit(FOREST_READY_EVENT, this);
+  }
+
+  setInspectHandler(handler: ((inspection: ForestInspection) => void) | null): void {
+    this.inspectHandler = handler;
+  }
+
+  setActivity(activity: ForestActivity): void {
+    const { x, y } = toScreen(6, 6);
+    this.construction?.setActivity(activity, x, y, depthOf(6, 6) + 0.8);
   }
 
   private drawGround(): void {
@@ -75,9 +99,16 @@ export class ForestScene extends Phaser.Scene {
     const { x, y } = toScreen(tree.gx, tree.gy);
     const img = this.add.image(x, y, `tree-${tree.species}`).setOrigin(0.5, 1);
     img.setDepth(depthOf(tree.gx, tree.gy));
+    this.makeInspectable(img, {
+      kind: "tree",
+      title: `${titleCase(tree.species)} evidence tree`,
+      status: "Verified simulation",
+      evidence: "Planted only after a completed, reproducible resilience run.",
+      runId: tree.runId,
+      occurredAt: tree.plantedAt,
+    });
     if (animate) {
-      img.setScale(0.1).setAlpha(0);
-      this.tweens.add({ targets: img, scale: 1, alpha: 1, duration: 500, ease: "Back.Out" });
+      this.construction?.plantTree(x, y, depthOf(tree.gx, tree.gy), img);
     }
   }
 
@@ -87,9 +118,46 @@ export class ForestScene extends Phaser.Scene {
     const { x, y } = toScreen(building.gx, building.gy);
     const img = this.add.image(x, y, `bld-${building.kind}`).setOrigin(0.5, 1);
     img.setDepth(depthOf(building.gx, building.gy) + 0.5);
+    this.makeInspectable(img, {
+      kind: "building",
+      title: buildingName(building.kind),
+      status: "Verified resilience milestone",
+      evidence: building.milestone,
+      runId: building.runId,
+      occurredAt: building.grownAt,
+    });
     if (animate) {
-      img.setScale(0.1, 0.1).setAlpha(0);
-      this.tweens.add({ targets: img, scaleX: 1, scaleY: 1, alpha: 1, duration: 650, ease: "Back.Out" });
+      this.construction?.completeBuilding(x, y, depthOf(building.gx, building.gy), img, building.milestone);
     }
   }
+
+  private makeInspectable(image: Phaser.GameObjects.Image, inspection: ForestInspection): void {
+    image.setInteractive({ cursor: "pointer" });
+    image.on("pointerover", () => {
+      image.setTint(0xf1ffd2);
+      this.tweens.add({ targets: image, scaleX: 1.06, scaleY: 1.06, duration: 130, ease: "Sine.Out" });
+    });
+    image.on("pointerout", () => {
+      image.clearTint();
+      this.tweens.add({ targets: image, scaleX: 1, scaleY: 1, duration: 150, ease: "Sine.Out" });
+    });
+    image.on("pointerup", (pointer: Phaser.Input.Pointer) => {
+      const moved = Phaser.Math.Distance.Between(pointer.downX, pointer.downY, pointer.x, pointer.y);
+      if (moved < 8) this.inspectHandler?.(inspection);
+    });
+  }
+}
+
+function titleCase(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function buildingName(kind: Building["kind"]): string {
+  const labels: Record<Building["kind"], string> = {
+    watchtower: "Reliability watchtower",
+    reservoir: "Resilience reservoir",
+    solarHall: "Solar operations hall",
+    resilienceHall: "Community resilience hall",
+  };
+  return labels[kind];
 }

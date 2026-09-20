@@ -1,14 +1,27 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
 import { ForestScene, FOREST_READY_EVENT } from "./ForestScene";
+import type { ForestInspection } from "./ForestScene";
+import type { ForestActivity } from "./LiveConstruction";
 import type { GrowthEvent, WorldState } from "@verdant/protocol";
 
-export function GameCanvas({ world, pendingGrowth }: { world: WorldState | null; pendingGrowth: GrowthEvent[] }) {
+export type { ForestInspection, ForestActivity };
+
+export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
+  world: WorldState | null;
+  pendingGrowth: GrowthEvent[];
+  activity: ForestActivity;
+  onInspect?: (inspection: ForestInspection) => void;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<ForestScene | null>(null);
   const processedCount = useRef(0);
   const worldAppliedRef = useRef(false);
+  const inspectRef = useRef(onInspect);
+  const activityRef = useRef(activity);
+  inspectRef.current = onInspect;
+  activityRef.current = activity;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -26,6 +39,8 @@ export function GameCanvas({ world, pendingGrowth }: { world: WorldState | null;
 
     const onReady = (scene: ForestScene) => {
       sceneRef.current = scene;
+      scene.setInspectHandler((inspection) => inspectRef.current?.(inspection));
+      scene.setActivity(activityRef.current);
       if (world && !worldAppliedRef.current) {
         scene.setWorld(world);
         worldAppliedRef.current = true;
@@ -62,6 +77,10 @@ export function GameCanvas({ world, pendingGrowth }: { world: WorldState | null;
     }
     processedCount.current = pendingGrowth.length;
   }, [pendingGrowth]);
+
+  useEffect(() => {
+    sceneRef.current?.setActivity(activity);
+  }, [activity]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

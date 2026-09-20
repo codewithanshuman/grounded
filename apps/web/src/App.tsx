@@ -12,6 +12,7 @@ import cloverStudioUrl from "../../../assets/grounded-clover-studio.png";
 import "./fonts.css";
 import "./depth-upgrade.css";
 import "./proof-path.css";
+import type { ForestActivity, ForestInspection } from "./game/GameCanvas";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
 
@@ -61,9 +62,11 @@ export default function App() {
   const [climateSweep, setClimateSweep] = useState<ClimateSweepResult | null>(null);
   const [calibration, setCalibration] = useState<ClimateCalibration | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
+  const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
   const isRunning = isSimulating || isOptimizing || isSweeping;
+  const forestActivity: ForestActivity = isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
 
   const setConfigField = (key: keyof MicrogridConfig) => (val: number) => setConfig((c) => ({ ...c, [key]: val }));
 
@@ -258,8 +261,18 @@ export default function App() {
             <div className="overview-grid">
               <section className="world-card">
                 <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>Resilience forest</h3></div><span className="verified-pill">Persistent evidence</span></div>
-                <div className="light-world"><Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} /></Suspense></div>
-                <div className="world-caption"><p>Drag to explore · scroll to zoom</p>{world && <div><span><b>{world.trees.length}</b> verified trees</span><span><b>{world.buildings.length}</b> resilience buildings</span><span><b>{world.totalRuns}</b> completed runs</span></div>}</div>
+                <div className="light-world">
+                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} /></Suspense>
+                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "Verified objects only"}</strong></span></div>
+                  {forestInspection && <aside className="world-inspector" aria-live="polite">
+                    <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
+                    <small>{forestInspection.status}</small>
+                    <h4>{forestInspection.title}</h4>
+                    <p>{forestInspection.evidence}</p>
+                    <div><span>RUN <code>{forestInspection.runId.slice(0, 12)}</code></span><span>{new Date(forestInspection.occurredAt).toLocaleString()}</span></div>
+                  </aside>}
+                </div>
+                <div className="world-caption"><p>Drag to explore · scroll to zoom · select an object to inspect proof</p>{world && <div><span><b>{world.trees.length}</b> verified trees</span><span><b>{world.buildings.length}</b> resilience buildings</span><span><b>{world.totalRuns}</b> completed runs</span></div>}</div>
               </section>
               <aside className="hazard-column">
                 <section className="hazard-card"><div className="card-heading"><div><small>02 · CLIMATE PRESSURE</small><h3>Choose a hazard</h3></div></div><div className="panel-surface"><StressPanel preset={preset} setPreset={setPreset} isSweeping={isSweeping} runClimateSweep={runAllHazards} /></div></section>

@@ -706,11 +706,67 @@ body {
 .verified-pill { padding: 8px 11px; border-radius: 999px; border-color: #cbdac4; background: #eef5e9; }
 
 .light-world {
+  position: relative;
   height: 430px;
+  overflow: hidden;
   background:
     radial-gradient(circle at 50% 0%, rgba(143, 174, 111, 0.15), transparent 40%),
     #e6ecdf;
 }
+
+.world-live-state {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 4;
+  padding: 9px 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(71, 108, 67, 0.18);
+  border-radius: 11px;
+  color: #284b32;
+  background: rgba(255, 254, 249, 0.88);
+  box-shadow: 0 8px 22px rgba(28, 52, 35, 0.09);
+  backdrop-filter: blur(10px);
+  pointer-events: none;
+}
+.world-live-state > i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #76a454;
+  box-shadow: 0 0 0 5px rgba(118, 164, 84, 0.13);
+}
+.world-live-state > span { display: flex; flex-direction: column; gap: 3px; }
+.world-live-state small { color: #78906e; font: 600 6px/1 IBM Plex Mono, monospace; letter-spacing: .12em; }
+.world-live-state strong { font-size: 8px; font-weight: 650; }
+.world-live-state.working { border-color: rgba(191, 145, 54, 0.28); color: #624d27; }
+.world-live-state.working > i { background: #d0a03f; box-shadow: 0 0 0 5px rgba(208, 160, 63, 0.14); animation: worldPulse 1.25s ease-in-out infinite; }
+
+.world-inspector {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 5;
+  width: min(310px, calc(100% - 28px));
+  padding: 15px 16px 13px;
+  border: 1px solid rgba(197, 220, 169, 0.38);
+  border-radius: 15px;
+  color: #f6f7ec;
+  background: linear-gradient(145deg, rgba(21, 58, 38, .96), rgba(36, 78, 43, .94));
+  box-shadow: 0 18px 40px rgba(18, 50, 31, .26);
+  backdrop-filter: blur(12px);
+  animation: inspectorIn .24s ease-out;
+}
+.world-inspector > button { position: absolute; top: 9px; right: 10px; width: 25px; height: 25px; border: 1px solid rgba(255,255,255,.18); border-radius: 50%; color: #eef4e7; background: rgba(255,255,255,.07); font-size: 15px; line-height: 1; }
+.world-inspector > small { color: #b7df72; font: 600 7px/1 IBM Plex Mono, monospace; letter-spacing: .11em; text-transform: uppercase; }
+.world-inspector h4 { margin: 8px 32px 0 0; font-size: 16px; line-height: 1.1; }
+.world-inspector p { margin: 7px 0 11px; color: rgba(244, 248, 235, .72); font-size: 9px; line-height: 1.45; }
+.world-inspector > div { padding-top: 9px; display: flex; justify-content: space-between; gap: 10px; border-top: 1px solid rgba(255,255,255,.12); color: rgba(238, 244, 228, .56); font: 500 6.5px/1 IBM Plex Mono, monospace; }
+.world-inspector code { color: #d5e9b0; font: inherit; }
+@keyframes inspectorIn { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes worldPulse { 50% { box-shadow: 0 0 0 8px rgba(208, 160, 63, 0); } }
 
 .world-caption {
   min-height: 58px;

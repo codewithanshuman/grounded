@@ -6,7 +6,6 @@ export const WORLD_TEXTURES = {
   water: ["world-water-0", "world-water-1", "world-water-2"],
   sand: ["world-sand-0", "world-sand-1"],
   grass: ["world-grass-0", "world-grass-1", "world-grass-2"],
-  road: "world-road",
   plaza: "world-plaza",
   bush: "world-bush",
   rock: "world-rock",
@@ -27,9 +26,17 @@ export const WORLD_TEXTURES = {
   substation: "world-substation",
   home: "world-home",
   serviceVan: "world-service-van",
+  cityHouse: "world-city-house",
+  cityTownhouse: "world-city-townhouse",
+  cityOffice: "world-city-office",
+  cityTower: "world-city-tower",
+  cityUtility: "world-city-utility",
   crane: "world-crane",
   scaffold: "world-scaffold",
 } as const;
+
+export type WorldRoadClass = "boulevard" | "street" | "lane";
+export const roadTextureKey = (mask: number, roadClass: WorldRoadClass): string => `world-road-${roadClass}-${mask}`;
 
 const TERRAIN = {
   grass: [0x5bbf3e, 0x54b638, 0x63c748],
@@ -81,6 +88,7 @@ export function bakeTextures(scene: Phaser.Scene): void {
   bakeTerrain(scene);
   bakeProps(scene);
   bakeInfrastructure(scene);
+  bakeCityStructures(scene);
   bakeTrees(scene);
   bakeBuildings(scene);
   bakeEffects(scene);
@@ -116,12 +124,8 @@ function bakeTerrain(scene: Phaser.Scene): void {
     finish(g, key, HALF_W * 2, HALF_H * 2);
   });
 
-  {
-    const g = graphics(scene); g.fillStyle(TERRAIN.road, 1); g.fillPoints(diamondPoints(), true);
-    g.lineStyle(3, 0xd8d3c4, 0.95); g.lineBetween(1, 23, 48, 47); g.lineBetween(48, 1, 95, 23);
-    g.lineStyle(1, TERRAIN.roadShade, 0.8); g.strokePoints(diamondPoints(), true); g.fillStyle(TERRAIN.roadLine, 0.9);
-    for (let x = 28; x < 76; x += 18) g.fillRect(x, 22, 9, 2);
-    finish(g, WORLD_TEXTURES.road, HALF_W * 2, HALF_H * 2);
+  for (const roadClass of ["boulevard", "street", "lane"] as const) {
+    for (let mask = 0; mask < 16; mask++) bakeRoadTile(scene, mask, roadClass);
   }
   {
     const g = graphics(scene); g.fillStyle(TERRAIN.plaza, 1); g.fillPoints(diamondPoints(), true);
@@ -129,6 +133,48 @@ function bakeTerrain(scene: Phaser.Scene): void {
     g.lineBetween(24, 12, 72, 36); g.lineBetween(72, 12, 24, 36);
     finish(g, WORLD_TEXTURES.plaza, HALF_W * 2, HALF_H * 2);
   }
+}
+
+type Point3 = readonly [number, number, number];
+
+function isoAt(point: Point3, originX = HALF_W, originY = HALF_H): Phaser.Math.Vector2 {
+  return new Phaser.Math.Vector2(originX + (point[0] - point[1]) * HALF_W, originY + (point[0] + point[1]) * HALF_H - point[2]);
+}
+
+function isoFace(g: Phaser.GameObjects.Graphics, color: number, alpha: number, points: readonly Point3[], originX = HALF_W, originY = HALF_H): void {
+  g.fillStyle(color, alpha); g.fillPoints(points.map((point) => isoAt(point, originX, originY)), true);
+}
+
+function isoStroke(g: Phaser.GameObjects.Graphics, color: number, alpha: number, width: number, points: readonly Point3[], originX = HALF_W, originY = HALF_H): void {
+  g.lineStyle(width, color, alpha); g.strokePoints(points.map((point) => isoAt(point, originX, originY)), true);
+}
+
+const isoDiamond = (half: number, height = 0): Point3[] => [[-half, -half, height], [half, -half, height], [half, half, height], [-half, half, height]];
+const roadBand = (from: number, to: number, axis: "u" | "v", half: number): Point3[] => axis === "u"
+  ? [[from, -half, 0], [to, -half, 0], [to, half, 0], [from, half, 0]]
+  : [[-half, from, 0], [half, from, 0], [half, to, 0], [-half, to, 0]];
+
+function bakeRoadTile(scene: Phaser.Scene, mask: number, roadClass: WorldRoadClass): void {
+  const g = graphics(scene);
+  const widths = roadClass === "boulevard" ? { road: .42, kerb: .5 } : roadClass === "street" ? { road: .3, kerb: .4 } : { road: .2, kerb: .26 };
+  const arms: Array<[number, Point3[]]> = [[1, roadBand(-.5, -widths.road, "v", widths.road)], [2, roadBand(widths.road, .5, "u", widths.road)], [4, roadBand(widths.road, .5, "v", widths.road)], [8, roadBand(-.5, -widths.road, "u", widths.road)]];
+  const kerbArms: Array<[number, Point3[]]> = [[1, roadBand(-.5, -widths.kerb, "v", widths.kerb)], [2, roadBand(widths.kerb, .5, "u", widths.kerb)], [4, roadBand(widths.kerb, .5, "v", widths.kerb)], [8, roadBand(-.5, -widths.kerb, "u", widths.kerb)]];
+  isoFace(g, TERRAIN.grass[1]!, 1, isoDiamond(.5));
+  const kerb = roadClass === "boulevard" ? shade(TERRAIN.plaza, 6) : TERRAIN.plaza;
+  isoFace(g, kerb, 1, isoDiamond(widths.kerb)); kerbArms.forEach(([bit, points]) => { if (mask & bit) isoFace(g, kerb, 1, points); });
+  isoFace(g, TERRAIN.road, 1, isoDiamond(widths.road)); arms.forEach(([bit, points]) => { if (mask & bit) isoFace(g, TERRAIN.road, 1, points); });
+  if (roadClass !== "lane") {
+    const straightU = mask === 10; const straightV = mask === 5;
+    if (straightU || straightV) {
+      const marks = roadClass === "boulevard" ? [{ offset: -.3, solid: false }, { offset: 0, solid: true }, { offset: .3, solid: false }] : [{ offset: -.28, solid: false }, { offset: .04, solid: false }];
+      marks.forEach(({ offset, solid }) => {
+        const start = solid ? -.5 : offset; const end = solid ? .5 : offset + .24;
+        const from: Point3 = straightU ? [start, offset, 0] : [offset, start, 0]; const to: Point3 = straightU ? [end, offset, 0] : [offset, end, 0];
+        const a = isoAt(from); const b = isoAt(to); g.lineStyle(2, TERRAIN.roadLine, .85); g.lineBetween(a.x, a.y, b.x, b.y);
+      });
+    }
+  }
+  finish(g, roadTextureKey(mask, roadClass), HALF_W * 2, HALF_H * 2);
 }
 
 function bakeProps(scene: Phaser.Scene): void {
@@ -214,6 +260,67 @@ function bakeInfrastructure(scene: Phaser.Scene): void {
   {
     const g = graphics(scene); g.fillStyle(0x173b2d,.2); g.fillEllipse(45,49,57,12); g.fillStyle(0xf3f5ed,1); g.fillRoundedRect(18,20,48,23,5); g.fillStyle(0x407a54,1); g.fillRect(42,14,23,23); g.fillStyle(0x9fd8f5,1); g.fillRect(47,18,13,8); g.fillStyle(0x355044,1); g.fillCircle(28,44,7); g.fillCircle(58,44,7); g.fillStyle(0xb7df72,1); g.fillRect(20,25,15,5); finish(g,WORLD_TEXTURES.serviceVan,90,58);
   }
+}
+
+type CityPalette = { wall: number; wallShadow: number; roof: number; roofLight: number; roofShadow: number; trim: number; window: number; windowShadow: number };
+
+function bakeCityStructures(scene: Phaser.Scene): void {
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityHouse, "house", 42, { wall: 0xf2e6cf, wallShadow: 0xc7b99f, roof: 0xb85c3b, roofLight: 0xd47a55, roofShadow: 0x85402c, trim: 0x76523a, window: 0x9ed9f2, windowShadow: 0x5a9fbc });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityTownhouse, "townhouse", 66, { wall: 0xdfead8, wallShadow: 0xa9bda5, roof: 0x477a5a, roofLight: 0x6b9f73, roofShadow: 0x2c563e, trim: 0xd8a447, window: 0xc4e8f4, windowShadow: 0x76aebe });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityOffice, "office", 104, { wall: 0xdde9ed, wallShadow: 0xa6bdc4, roof: 0x315e72, roofLight: 0x53849a, roofShadow: 0x203e4c, trim: 0x74a75c, window: 0xa8e0f4, windowShadow: 0x5892aa });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityTower, "tower", 154, { wall: 0xe8eadf, wallShadow: 0xbcc2b3, roof: 0x375f4b, roofLight: 0x5f8e71, roofShadow: 0x244233, trim: 0xd7a33f, window: 0xb9e6f4, windowShadow: 0x6ca0b2 });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityUtility, "utility", 70, { wall: 0xd7dedc, wallShadow: 0x9faaa9, roof: 0x59666e, roofLight: 0x7f8d94, roofShadow: 0x39434a, trim: 0xd5a33d, window: 0xa9d6e9, windowShadow: 0x608b9d });
+}
+
+function bakeCityBuilding(scene: Phaser.Scene, key: string, kind: "house" | "townhouse" | "office" | "tower" | "utility", body: number, palette: CityPalette): void {
+  const g = graphics(scene); const crown = kind === "house" ? 24 : kind === "tower" ? 35 : kind === "utility" ? 30 : 16; const height = body + crown + HALF_H * 2; const originY = height - HALF_H; const half = .42;
+  isoFace(g, TERRAIN.shadow, .22, isoDiamond(.46).map(([u,v,z]) => [u+.03,v+.03,z] as Point3), HALF_W, originY);
+  if (kind === "tower") {
+    drawCityBox(g, originY, half, 0, body * .7, palette, palette.roofShadow); drawCityWindows(g, originY, half, 10, body * .7 - 7, palette, 5, 3);
+    drawCityBox(g, originY, half * .64, body * .7, body, palette, palette.roof); drawCityWindows(g, originY, half * .64, body * .7 + 8, body - 7, palette, 3, 2);
+    isoFace(g, palette.trim, 1, [[-.025,.025,body+28],[.025,.025,body+28],[.025,.025,body],[-.025,.025,body]], HALF_W, originY);
+    const beacon = isoAt([0,0,body+29],HALF_W,originY); g.fillStyle(0xff5959,1); g.fillCircle(beacon.x,beacon.y,3);
+  } else if (kind === "utility") {
+    drawCityBox(g, originY, half, 0, body * .58, palette, palette.roofShadow);
+    isoFace(g,palette.roofLight,1,[[-.32,.32,body+12],[.05,.32,body+12],[.05,.32,body*.58],[-.32,.32,body*.58]],HALF_W,originY);
+    isoFace(g,palette.roofShadow,1,[[.05,.32,body+12],[.05,-.15,body+12],[.05,-.15,body*.58],[.05,.32,body*.58]],HALF_W,originY);
+    isoFace(g,palette.trim,1,[[.18,.12,body+28],[.32,.12,body+28],[.32,.12,0],[.18,.12,0]],HALF_W,originY);
+  } else {
+    drawCityBox(g, originY, kind === "house" ? half*.84 : half, 0, body, palette, kind === "house" ? palette.wall : palette.roof);
+    drawCityWindows(g, originY, kind === "house" ? half*.84 : half, 8, body-7, palette, kind === "office" ? 4 : 2, kind === "office" ? 3 : 2);
+    if (kind === "house") drawCityRoof(g, originY, half*.84, body, 22, palette);
+    if (kind === "townhouse") {
+      isoFace(g,palette.trim,1,[[-half,half,18],[half,half,18],[half,half,9],[-half,half,9]],HALF_W,originY);
+      isoFace(g,palette.roofLight,1,isoDiamond(half*.86,body+9),HALF_W,originY);
+    }
+    if (kind === "office") {
+      isoFace(g,palette.trim,1,[[-.16,-.16,body+11],[.16,-.16,body+11],[.16,.16,body+11],[-.16,.16,body+11]],HALF_W,originY);
+    }
+  }
+  finish(g,key,HALF_W*2,height);
+}
+
+function drawCityBox(g: Phaser.GameObjects.Graphics, originY: number, half: number, base: number, top: number, palette: CityPalette, roof: number): void {
+  isoFace(g,palette.wall,1,[[-half,half,top],[half,half,top],[half,half,base],[-half,half,base]],HALF_W,originY);
+  isoFace(g,palette.wallShadow,1,[[half,half,top],[half,-half,top],[half,-half,base],[half,half,base]],HALF_W,originY);
+  isoFace(g,roof,1,isoDiamond(half,top),HALF_W,originY); isoStroke(g,palette.roofShadow,.9,1,isoDiamond(half,top),HALF_W,originY);
+  isoFace(g,palette.trim,.94,[[-half,half,base+7],[half,half,base+7],[half,half,base+3],[-half,half,base+3]],HALF_W,originY);
+}
+
+function drawCityWindows(g: Phaser.GameObjects.Graphics, originY: number, half: number, base: number, top: number, palette: CityPalette, rows: number, columns: number): void {
+  const span=top-base; const rowStep=span/(rows+1); const colStep=(half*2*.72)/(columns+1); const start=-half*.72;
+  for(let row=1;row<=rows;row++) for(let col=1;col<=columns;col++) { const z=base+rowStep*row; const offset=start+colStep*col; const size=Math.min(rowStep*.5,7);
+    isoFace(g,palette.window,.94,[[offset-.05,half,z+size/2],[offset+.05,half,z+size/2],[offset+.05,half,z-size/2],[offset-.05,half,z-size/2]],HALF_W,originY);
+    isoFace(g,palette.windowShadow,.94,[[half,offset-.05,z+size/2],[half,offset+.05,z+size/2],[half,offset+.05,z-size/2],[half,offset-.05,z-size/2]],HALF_W,originY);
+  }
+}
+
+function drawCityRoof(g: Phaser.GameObjects.Graphics, originY: number, half: number, top: number, pitch: number, palette: CityPalette): void {
+  const eave=half+.05; const ridge=top+pitch;
+  isoFace(g,palette.roofShadow,1,[[-eave,-eave,top],[eave,-eave,top],[eave,0,ridge],[-eave,0,ridge]],HALF_W,originY);
+  isoFace(g,palette.roofLight,1,[[-eave,0,ridge],[eave,0,ridge],[eave,eave,top],[-eave,eave,top]],HALF_W,originY);
+  isoFace(g,palette.wallShadow,1,[[eave,-eave,top],[eave,0,ridge],[eave,eave,top]],HALF_W,originY);
+  isoFace(g,palette.trim,1,[[half*.4,half*.3,ridge+8],[half*.6,half*.3,ridge+8],[half*.6,half*.3,top+4],[half*.4,half*.3,top+4]],HALF_W,originY);
 }
 
 function bakeTrees(scene: Phaser.Scene): void {

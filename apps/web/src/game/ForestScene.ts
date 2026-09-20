@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { FOREST_GRID_SIZE, HALF_H, HALF_W, toScreen, depthOf } from "./iso";
-import { bakeTextures, WORLD_TEXTURES } from "./textures";
+import { bakeTextures, roadTextureKey, WORLD_TEXTURES, type WorldRoadClass } from "./textures";
 import { LiveConstruction, type ForestActivity } from "./LiveConstruction";
 import type { Building, GrowthEvent, Tree, WorldState } from "@verdant/protocol";
 import workerUrl from "../../../../assets/world-worker.png";
@@ -41,6 +41,7 @@ export class ForestScene extends Phaser.Scene {
     this.construction = new LiveConstruction(this);
     this.drawGround();
     this.drawInfrastructure();
+    this.drawCityContext();
     this.spawnEnergyNetwork();
     this.spawnAmbientWorld();
 
@@ -88,8 +89,8 @@ export class ForestScene extends Phaser.Scene {
         const inlet = inside && edge === 0 && seed % 5 === 0;
         const isWater = !inside || inlet;
         const isSand = inside && !inlet && (edge <= 1 || (edge === 2 && seed % 7 === 0));
-        const isRoad = inside && edge > 2 && (gx === 7 || gx === 16 || gy === 7 || gy === 16);
-        const isPlaza = inside && gx >= 10 && gx <= 14 && gy >= 10 && gy <= 14;
+        const isRoad = inside && edge > 1 && isRoadCell(gx, gy);
+        const isPlaza = inside && gx >= 10 && gx <= 13 && gy >= 10 && gy <= 13;
         const key = isWater
           ? WORLD_TEXTURES.water[seed % WORLD_TEXTURES.water.length]!
           : isSand
@@ -97,7 +98,7 @@ export class ForestScene extends Phaser.Scene {
             : isPlaza
               ? WORLD_TEXTURES.plaza
               : isRoad
-                ? WORLD_TEXTURES.road
+                ? roadTextureKey(roadMaskAt(gx, gy), roadClassAt(gx, gy))
                 : WORLD_TEXTURES.grass[seed % WORLD_TEXTURES.grass.length]!;
         const { x, y } = toScreen(gx, gy);
         const img = this.add.image(x, y, key).setOrigin(0.5, 0.5);
@@ -107,7 +108,7 @@ export class ForestScene extends Phaser.Scene {
           const propKeys = [WORLD_TEXTURES.pine, WORLD_TEXTURES.bush, WORLD_TEXTURES.rock] as const;
           this.add.image(x, y + HALF_H, propKeys[(seed >>> 5) % propKeys.length]!).setOrigin(0.5, 1).setDepth(depthOf(gx, gy) - 0.5).setScale(0.82);
         }
-        if (isRoad && seed % 9 === 0) {
+        if (isRoad && roadClassAt(gx, gy) === "boulevard" && roadMaskAt(gx, gy) === 15) {
           this.add.image(x, y + HALF_H, WORLD_TEXTURES.lamp).setOrigin(0.5, 1).setDepth(depthOf(gx, gy) + 0.2).setScale(0.72);
         }
       }
@@ -118,10 +119,10 @@ export class ForestScene extends Phaser.Scene {
 
   private drawInfrastructure(): void {
     const sites = [
-      { cell: [4, 5] as const, key: WORLD_TEXTURES.hospital, scale: 0.9, label: "CRITICAL CARE" },
-      { cell: [4, 12] as const, key: WORLD_TEXTURES.solarArray, scale: 0.98, label: "1.8 MW SOLAR" },
-      { cell: [8, 19] as const, key: WORLD_TEXTURES.battery, scale: 1.02, label: "12 MWh STORAGE" },
-      { cell: [19, 18] as const, key: WORLD_TEXTURES.substation, scale: 0.98, label: "GRID INTERTIE" },
+      { cell: [6, 6] as const, key: WORLD_TEXTURES.hospital, scale: 0.94, label: "CRITICAL CARE" },
+      { cell: [2, 12] as const, key: WORLD_TEXTURES.solarArray, scale: 0.98, label: "1.8 MW SOLAR" },
+      { cell: [7, 17] as const, key: WORLD_TEXTURES.battery, scale: 1.02, label: "12 MWh STORAGE" },
+      { cell: [21, 17] as const, key: WORLD_TEXTURES.substation, scale: 0.98, label: "GRID INTERTIE" },
     ];
     sites.forEach(({ cell: [gx, gy], key, scale, label }) => {
       const p = toScreen(gx, gy);
@@ -133,29 +134,20 @@ export class ForestScene extends Phaser.Scene {
       plate.setShadow(0, 4, "#082b20", 8, true, true);
     });
 
-    for (const [gx, gy, scale] of [[3, 11, 0.7], [5, 13, 0.7], [3, 13, 0.58]] as const) {
+    for (const [gx, gy, scale] of [[1, 11, 0.7], [3, 11, 0.7], [2, 13, 0.62]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.solarArray).setOrigin(0.5, 1).setScale(scale).setDepth(depthOf(gx, gy) + 0.25);
     }
-    for (const [gx, gy] of [[9, 19], [10, 19]] as const) {
+    for (const [gx, gy] of [[6, 18], [8, 18]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.battery).setOrigin(0.5, 1).setScale(0.68).setDepth(depthOf(gx, gy) + 0.26);
-    }
-
-    for (const [gx, gy, flip] of [
-      [18, 3, false], [19, 4, true], [20, 5, false],
-      [18, 8, true], [19, 9, false], [20, 10, true],
-      [18, 12, false], [19, 13, true], [20, 14, false],
-    ] as const) {
-      const p = toScreen(gx, gy);
-      this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.home).setOrigin(0.5, 1).setScale(0.78).setFlipX(flip).setDepth(depthOf(gx, gy) + 0.3);
     }
 
     for (const [gx, gy] of [[2, 3], [2, 19], [21, 4], [21, 20], [12, 3], [13, 20]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.palm).setOrigin(0.5, 1).setScale(1.05).setDepth(depthOf(gx, gy) + 0.25);
     }
-    for (const [gx, gy] of [[9, 10], [15, 10], [9, 14], [15, 14]] as const) {
+    for (const [gx, gy] of [[10, 10], [13, 10], [10, 13], [13, 13]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.bench).setOrigin(0.5, 1).setScale(0.72).setDepth(depthOf(gx, gy) + 0.2);
     }
@@ -169,11 +161,37 @@ export class ForestScene extends Phaser.Scene {
     }
   }
 
+  private drawCityContext(): void {
+    const buildings = [
+      { cell: [11, 2] as const, key: WORLD_TEXTURES.cityTower, scale: 0.92 },
+      { cell: [6, 2] as const, key: WORLD_TEXTURES.cityTownhouse, scale: 0.94 },
+      { cell: [16, 2] as const, key: WORLD_TEXTURES.cityOffice, scale: 0.9 },
+      { cell: [21, 2] as const, key: WORLD_TEXTURES.cityUtility, scale: 0.9 },
+      { cell: [11, 6] as const, key: WORLD_TEXTURES.cityOffice, scale: 0.9 },
+      { cell: [16, 6] as const, key: WORLD_TEXTURES.cityTownhouse, scale: 0.96 },
+      { cell: [21, 6] as const, key: WORLD_TEXTURES.cityHouse, scale: 0.96 },
+      { cell: [2, 7] as const, key: WORLD_TEXTURES.cityHouse, scale: 0.96 },
+      { cell: [11, 17] as const, key: WORLD_TEXTURES.cityUtility, scale: 0.9 },
+      { cell: [16, 17] as const, key: WORLD_TEXTURES.cityOffice, scale: 0.9 },
+      { cell: [2, 21] as const, key: WORLD_TEXTURES.cityHouse, scale: 0.96 },
+      { cell: [6, 21] as const, key: WORLD_TEXTURES.cityTownhouse, scale: 0.94 },
+      { cell: [11, 21] as const, key: WORLD_TEXTURES.cityOffice, scale: 0.88 },
+      { cell: [16, 21] as const, key: WORLD_TEXTURES.cityTownhouse, scale: 0.94 },
+      { cell: [21, 21] as const, key: WORLD_TEXTURES.cityHouse, scale: 0.96 },
+      { cell: [17, 11] as const, key: WORLD_TEXTURES.cityHouse, scale: 0.94 },
+      { cell: [21, 11] as const, key: WORLD_TEXTURES.cityTownhouse, scale: 0.94 },
+    ];
+    buildings.forEach(({ cell: [gx, gy], key, scale }, index) => {
+      const p = toScreen(gx, gy);
+      this.add.image(p.x, p.y + HALF_H, key).setOrigin(0.5, 1).setScale(scale).setFlipX(index % 3 === 1).setDepth(depthOf(gx, gy) + 0.35);
+    });
+  }
+
   private spawnEnergyNetwork(): void {
     const routes: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
-      [[4, 12], [7, 12], [7, 7], [4, 5]],
-      [[8, 19], [7, 16], [7, 12]],
-      [[19, 18], [16, 16], [7, 16]],
+      [[2, 12], [4, 12], [4, 9], [6, 6]],
+      [[7, 17], [9, 17], [9, 14], [4, 14], [4, 12]],
+      [[21, 17], [19, 17], [19, 14], [9, 14]],
     ];
     const lines = this.add.graphics().setDepth(-250);
     routes.forEach((route, routeIndex) => {
@@ -230,9 +248,9 @@ export class ForestScene extends Phaser.Scene {
     }
 
     const crew = [
-      { key: "crew-worker", from: [7, 8] as const, to: [7, 15] as const, duration: 8200 },
-      { key: "crew-architect", from: [8, 16] as const, to: [15, 16] as const, duration: 9600 },
-      { key: "crew-runner", from: [16, 8] as const, to: [16, 15] as const, duration: 6900 },
+      { key: "crew-worker", from: [9, 5] as const, to: [9, 18] as const, duration: 8200 },
+      { key: "crew-architect", from: [5, 14] as const, to: [18, 14] as const, duration: 9600 },
+      { key: "crew-runner", from: [14, 5] as const, to: [14, 18] as const, duration: 6900 },
     ];
     crew.forEach(({ key, from, to, duration }, index) => {
       const a = toScreen(from[0], from[1]); const b = toScreen(to[0], to[1]);
@@ -244,8 +262,8 @@ export class ForestScene extends Phaser.Scene {
       });
     });
 
-    const vanStart = toScreen(7, 3); const vanEnd = toScreen(7, 20);
-    const van = this.add.image(vanStart.x, vanStart.y + HALF_H, WORLD_TEXTURES.serviceVan).setOrigin(0.5, 1).setScale(0.55).setDepth(depthOf(7, 3) + 2);
+    const vanStart = toScreen(4, 3); const vanEnd = toScreen(4, 20);
+    const van = this.add.image(vanStart.x, vanStart.y + HALF_H, WORLD_TEXTURES.serviceVan).setOrigin(0.5, 1).setScale(0.55).setDepth(depthOf(4, 3) + 2);
     this.tweens.add({
       targets: van, x: vanEnd.x, y: vanEnd.y + HALF_H, duration: 15000, yoyo: true, repeat: -1, ease: "Linear",
       onYoyo: () => van.setFlipX(true), onRepeat: () => van.setFlipX(false), onUpdate: () => van.setDepth(van.y * 0.42 + 2),
@@ -338,4 +356,25 @@ function hashCell(gx: number, gy: number): number {
   let value = Math.imul(gx + 37, 73856093) ^ Math.imul(gy + 71, 19349663);
   value ^= value >>> 13;
   return value >>> 0;
+}
+
+const ROAD_LINES = new Set([4, 9, 14, 19]);
+
+function isRoadCell(gx: number, gy: number): boolean {
+  return ROAD_LINES.has(gx) || ROAD_LINES.has(gy);
+}
+
+function roadClassAt(gx: number, gy: number): WorldRoadClass {
+  if (gx === 9 || gy === 9) return "boulevard";
+  if (gx === 14 || gy === 14) return "street";
+  return "lane";
+}
+
+function roadMaskAt(gx: number, gy: number): number {
+  const road = (x: number, y: number) => {
+    if (x < 0 || y < 0 || x >= FOREST_GRID_SIZE || y >= FOREST_GRID_SIZE) return false;
+    const edge = Math.min(x, y, FOREST_GRID_SIZE - 1 - x, FOREST_GRID_SIZE - 1 - y);
+    return edge > 1 && isRoadCell(x, y);
+  };
+  return (road(gx, gy - 1) ? 1 : 0) | (road(gx + 1, gy) ? 2 : 0) | (road(gx, gy + 1) ? 4 : 0) | (road(gx - 1, gy) ? 8 : 0);
 }

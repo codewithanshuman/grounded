@@ -11,11 +11,22 @@ export const WORLD_TEXTURES = {
   bush: "world-bush",
   rock: "world-rock",
   pine: "world-pine",
+  palm: "world-palm",
   lamp: "world-lamp",
+  bench: "world-bench",
   fountain: "world-fountain",
   sparkle: "world-sparkle",
+  energyPulse: "world-energy-pulse",
   cloud: "world-cloud",
   boat: "world-boat",
+  buoy: "world-buoy",
+  dock: "world-dock",
+  hospital: "world-hospital",
+  solarArray: "world-solar-array",
+  battery: "world-battery",
+  substation: "world-substation",
+  home: "world-home",
+  serviceVan: "world-service-van",
   crane: "world-crane",
   scaffold: "world-scaffold",
 } as const;
@@ -69,6 +80,7 @@ export function bakeTextures(scene: Phaser.Scene): void {
   if (scene.textures.exists(WORLD_TEXTURES.water[0])) return;
   bakeTerrain(scene);
   bakeProps(scene);
+  bakeInfrastructure(scene);
   bakeTrees(scene);
   bakeBuildings(scene);
   bakeEffects(scene);
@@ -134,12 +146,74 @@ function bakeProps(scene: Phaser.Scene): void {
     g.fillStyle(0x704828, 1); g.fillRect(x - 2, y - 18, 5, 18); g.fillStyle(0x1f6f3a, 1);
     ([[12, 18], [25, 14], [37, 9]] as const).forEach(([offset, width]) => g.fillTriangle(x - width, y - offset, x + width, y - offset, x, y - offset - 20));
   });
+  propCanvas(WORLD_TEXTURES.palm, (g, x, y) => {
+    g.lineStyle(5, 0x875a2e, 1); g.lineBetween(x - 2, y, x + 5, y - 36);
+    g.lineStyle(3, 0x2e873d, 1);
+    for (const [dx, dy] of [[-25, -4], [-20, -16], [-8, -24], [12, -23], [24, -12], [25, 0]] as const) g.lineBetween(x + 5, y - 36, x + 5 + dx, y - 36 + dy);
+    g.fillStyle(0x53ad43, 1); g.fillCircle(x + 4, y - 37, 6); g.fillStyle(0x2f7936, 1); g.fillCircle(x + 9, y - 34, 4);
+  });
   propCanvas(WORLD_TEXTURES.lamp, (g, x, y) => {
     g.fillStyle(0x2b3038, 1); g.fillRect(x - 1, y - 30, 3, 30); g.fillRect(x - 6, y - 31, 12, 2); g.fillStyle(0xffd166, 0.22); g.fillCircle(x, y - 35, 9); g.fillStyle(0xffd166, 1); g.fillCircle(x, y - 35, 4);
+  });
+  propCanvas(WORLD_TEXTURES.bench, (g, x, y) => {
+    g.fillStyle(0x8a5b35, 1); g.fillRect(x - 16, y - 17, 32, 5); g.fillRect(x - 16, y - 9, 32, 5); g.fillStyle(0x3d4650, 1); g.fillRect(x - 12, y - 5, 3, 8); g.fillRect(x + 9, y - 5, 3, 8);
   });
   propCanvas(WORLD_TEXTURES.fountain, (g, x, y) => {
     g.fillStyle(0xc6c0b0, 1); g.fillEllipse(x, y - 3, 42, 16); g.fillStyle(0x54b7ea, 1); g.fillEllipse(x, y - 6, 32, 10); g.fillStyle(0xd9d5c8, 1); g.fillRect(x - 2, y - 27, 4, 21); g.fillStyle(0x9fd8f5, 0.85); g.fillCircle(x, y - 30, 6);
   });
+}
+
+function bakeInfrastructure(scene: Phaser.Scene): void {
+  {
+    const g = graphics(scene); const x = 100, ground = 166;
+    g.fillStyle(0x163b2c, .22); g.fillEllipse(x, ground, 138, 25);
+    g.fillStyle(0xb8c9ce, 1); g.fillPoints([new Phaser.Geom.Point(42, 98), new Phaser.Geom.Point(x, 127), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(42, 137)], true);
+    g.fillStyle(0xe9f1ef, 1); g.fillPoints([new Phaser.Geom.Point(158, 98), new Phaser.Geom.Point(x, 127), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(158, 137)], true);
+    g.fillStyle(0xf6fbf7, 1); g.fillPoints([new Phaser.Geom.Point(x, 68), new Phaser.Geom.Point(158, 98), new Phaser.Geom.Point(x, 127), new Phaser.Geom.Point(42, 98)], true);
+    g.fillStyle(0x4f91b2, 1); for (const [wx, wy] of [[55,112],[70,120],[113,121],[130,112]] as const) g.fillRect(wx, wy, 10, 8);
+    g.fillStyle(0xd94d49, 1); g.fillRect(94, 76, 12, 38); g.fillRect(81, 89, 38, 12);
+    g.fillStyle(0x285c68, 1); g.fillRect(108, 142, 16, 24);
+    g.fillStyle(0xffffff, .9); g.fillCircle(100, 91, 22); g.fillStyle(0xd94d49, 1); g.fillRect(96, 77, 8, 28); g.fillRect(86, 87, 28, 8);
+    finish(g, WORLD_TEXTURES.hospital, 200, 180);
+  }
+  {
+    const g = graphics(scene); const panels = [[24,34],[57,49],[90,64],[45,22],[78,37],[111,52]] as const;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(78, 78, 118, 24);
+    for (const [x,y] of panels) {
+      g.fillStyle(0x164c79, 1); g.fillPoints([new Phaser.Geom.Point(x,y),new Phaser.Geom.Point(x+29,y+14),new Phaser.Geom.Point(x+17,y+28),new Phaser.Geom.Point(x-12,y+14)],true);
+      g.lineStyle(1,0x67b9e8,.85); g.strokePoints([new Phaser.Geom.Point(x,y),new Phaser.Geom.Point(x+29,y+14),new Phaser.Geom.Point(x+17,y+28),new Phaser.Geom.Point(x-12,y+14)],true); g.lineBetween(x+8,y+4,x-3,y+18); g.lineBetween(x+19,y+9,x+8,y+23);
+    }
+    finish(g, WORLD_TEXTURES.solarArray, 160, 100);
+  }
+  {
+    const g = graphics(scene); const x = 62, ground = 94;
+    g.fillStyle(0x173b2d,.22); g.fillEllipse(x,ground,86,17);
+    g.fillStyle(0xaebcc0,1); g.fillPoints([new Phaser.Geom.Point(25,48),new Phaser.Geom.Point(x,66),new Phaser.Geom.Point(x,ground),new Phaser.Geom.Point(25,76)],true);
+    g.fillStyle(0xe8efeb,1); g.fillPoints([new Phaser.Geom.Point(99,48),new Phaser.Geom.Point(x,66),new Phaser.Geom.Point(x,ground),new Phaser.Geom.Point(99,76)],true);
+    g.fillStyle(0xf8fbf5,1); g.fillPoints([new Phaser.Geom.Point(x,31),new Phaser.Geom.Point(99,48),new Phaser.Geom.Point(x,66),new Phaser.Geom.Point(25,48)],true);
+    g.fillStyle(0x2f6c45,1); g.fillRect(72,68,18,15); g.fillStyle(0xb7df72,1); for(let i=0;i<4;i++) g.fillCircle(34+i*11,61+i*5,2);
+    g.lineStyle(2,0x59686e,.8); for(let i=0;i<5;i++) g.lineBetween(35+i*11,43+i*5,35+i*11,73+i*5);
+    finish(g, WORLD_TEXTURES.battery, 124, 106);
+  }
+  {
+    const g = graphics(scene); g.fillStyle(0x173b2d,.18); g.fillEllipse(66,100,105,19);
+    g.lineStyle(3,0x59666e,1); for(const x of [28,52,80,104]) { g.lineBetween(x,34,x,94); g.lineBetween(x-9,45,x+9,45); }
+    g.lineStyle(2,0xadb9bc,1); g.lineBetween(17,44,115,44); g.lineBetween(18,58,112,58);
+    g.fillStyle(0xd7a63d,1); for(const x of [27,52,80,104]) { g.fillCircle(x,45,4); g.fillCircle(x,58,4); }
+    g.fillStyle(0x49606b,1); g.fillRect(43,67,47,27); g.fillStyle(0x9fd8f5,1); g.fillRect(51,73,12,8); g.fillStyle(0xb7df72,1); g.fillCircle(80,76,3);
+    finish(g, WORLD_TEXTURES.substation, 132, 112);
+  }
+  {
+    const g = graphics(scene); const x=55,ground=102;
+    g.fillStyle(0x173b2d,.2); g.fillEllipse(x,ground,75,15); g.fillStyle(0xc5b997,1); g.fillPoints([new Phaser.Geom.Point(22,61),new Phaser.Geom.Point(x,77),new Phaser.Geom.Point(x,ground),new Phaser.Geom.Point(22,85)],true); g.fillStyle(0xf0ead7,1); g.fillPoints([new Phaser.Geom.Point(88,61),new Phaser.Geom.Point(x,77),new Phaser.Geom.Point(x,ground),new Phaser.Geom.Point(88,85)],true); g.fillStyle(0x2f6f52,1); g.fillPoints([new Phaser.Geom.Point(x,40),new Phaser.Geom.Point(91,58),new Phaser.Geom.Point(x,78),new Phaser.Geom.Point(19,58)],true); g.fillStyle(0x77bfe4,1); g.fillRect(65,79,9,9); g.fillStyle(0x835b37,1); g.fillRect(39,80,10,22);
+    finish(g, WORLD_TEXTURES.home,110,112);
+  }
+  {
+    const g = graphics(scene); g.fillStyle(0x754f31,1); for(let i=0;i<7;i++) g.fillRect(20+i*15,30+i*7,42,7); g.lineStyle(3,0x4b3728,1); g.lineBetween(23,35,23,84); g.lineBetween(129,84,129,42); finish(g,WORLD_TEXTURES.dock,160,94);
+  }
+  {
+    const g = graphics(scene); g.fillStyle(0x173b2d,.2); g.fillEllipse(45,49,57,12); g.fillStyle(0xf3f5ed,1); g.fillRoundedRect(18,20,48,23,5); g.fillStyle(0x407a54,1); g.fillRect(42,14,23,23); g.fillStyle(0x9fd8f5,1); g.fillRect(47,18,13,8); g.fillStyle(0x355044,1); g.fillCircle(28,44,7); g.fillCircle(58,44,7); g.fillStyle(0xb7df72,1); g.fillRect(20,25,15,5); finish(g,WORLD_TEXTURES.serviceVan,90,58);
+  }
 }
 
 function bakeTrees(scene: Phaser.Scene): void {
@@ -182,6 +256,8 @@ function bakeBuildings(scene: Phaser.Scene): void {
 
 function bakeEffects(scene: Phaser.Scene): void {
   { const g = graphics(scene); g.fillStyle(0xffffff, 0.78); g.fillRect(0, 3, 16, 2); g.fillRect(5, 0, 6, 8); finish(g, WORLD_TEXTURES.sparkle, 16, 8); }
+  { const g = graphics(scene); g.fillStyle(0xeaff9c, .22); g.fillCircle(8, 8, 8); g.fillStyle(0xd9ff7d, .95); g.fillCircle(8, 8, 3); finish(g, WORLD_TEXTURES.energyPulse, 16, 16); }
+  { const g = graphics(scene); g.fillStyle(0xffffff, .22); g.fillEllipse(18, 35, 31, 8); g.fillStyle(0xe7524e, 1); g.fillTriangle(11, 12, 25, 12, 18, 31); g.fillStyle(0xf8f1d8, 1); g.fillRect(15, 5, 6, 12); g.fillStyle(0xf1b840, 1); g.fillCircle(18, 5, 4); finish(g, WORLD_TEXTURES.buoy, 36, 42); }
   {
     const g = graphics(scene); g.fillStyle(0xffffff, 0.84);
     ([[35, 31, 20], [60, 27, 25], [88, 33, 20], [112, 32, 15]] as const).forEach(([x, y, r]) => g.fillCircle(x, y, r));

@@ -225,16 +225,6 @@ export default function App() {
               <p>Explore thousands of climate futures, expose the precise point of failure, and prove which intervention survives.</p>
               <div className="hero-trust"><span>Deterministic</span><span>Auditable</span><span>Site-aware</span></div>
             </div>
-            <div className="field-banner-evidence">
-              <div className="evidence-console-head"><span><i /> LIVE EVIDENCE CONSOLE</span><b>MODEL 01</b></div>
-              <div className="field-banner-stats">
-                <span><i>01</i><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span>
-                <span><i>02</i><small>MODEL DEPTH</small><strong>72 hours · 15-minute steps</strong></span>
-                <span><i>03</i><small>CLIMATE CALIBRATION</small><strong>{calibration ? `${calibration.source === "NASA_POWER" ? "NASA POWER" : "Reference"} · ${calibration.status}` : "Loading provenance…"}</strong></span>
-                <span><i>04</i><small>OPERATIONAL DATA</small><strong>{operationalDataLabel}</strong></span>
-              </div>
-              <div className="evidence-console-foot"><span>ILLUSTRATIVE FIELD ARTWORK</span><strong>72H / Δ15M</strong></div>
-            </div>
           </div>
 
           <div className="workspace-toolbar">
@@ -258,12 +248,15 @@ export default function App() {
           {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span></div>}
 
           {activeView === "overview" && (
+            <>
             <div className="overview-grid">
               <section className="world-card">
                 <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>Resilience forest</h3></div><span className="verified-pill">Persistent evidence</span></div>
                 <div className="light-world">
                   <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} /></Suspense>
-                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "Verified objects only"}</strong></span></div>
+                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
+                  <div className="world-map-id"><span>JAIPUR RESILIENCE TWIN</span><b>ISO 24 × 24</b></div>
+                  <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="verified" />Verified growth</span></div>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
                     <small>{forestInspection.status}</small>
@@ -279,6 +272,13 @@ export default function App() {
                 <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><small>EVIDENCE, NOT PROMISES</small><p>Every tree appears only after a completed, reproducible simulation.</p></div></section>
               </aside>
             </div>
+            <section className="world-provenance-strip" aria-label="Current model provenance">
+              <div><i /> <span><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span></div>
+              <div><span><small>MODEL HORIZON</small><strong>72 hours · Δ15m</strong></span></div>
+              <div><span><small>CLIMATE INPUT</small><strong>{calibration ? `${calibration.source === "NASA_POWER" ? "NASA POWER" : "Reference"} · ${calibration.status}` : "Loading provenance…"}</strong></span></div>
+              <div><span><small>OPERATIONAL INPUT</small><strong>{operationalDataLabel}</strong></span></div>
+            </section>
+            </>
           )}
 
           <Suspense fallback={<WorkspaceFallback />}>

@@ -126,9 +126,9 @@ export class LiveConstruction {
     const craneImage = this.scene.add.image(12, 10, WORLD_TEXTURES.crane).setOrigin(0.5, 1).setScale(0.78);
     const crane = this.scene.add.container(0, 0, [craneImage]).setName("crane");
 
-    const workerA = this.scene.add.image(-31, 8, "crew-worker").setOrigin(0.5, 1).setScale(0.16);
-    const workerB = this.scene.add.image(29, 7, "crew-architect").setOrigin(0.5, 1).setScale(0.15).setFlipX(true);
-    const runner = this.scene.add.image(4, 12, "crew-runner").setOrigin(0.5, 1).setScale(0.105);
+    const workerA = this.scene.add.image(-31, 8, "crew-worker").setOrigin(0.5, 1).setScale(0.21);
+    const workerB = this.scene.add.image(29, 7, "crew-architect").setOrigin(0.5, 1).setScale(0.2).setFlipX(true);
+    const runner = this.scene.add.image(4, 12, "crew-runner").setOrigin(0.5, 1).setScale(0.14);
 
     const plate = this.scene.add.graphics();
     plate.fillStyle(0x173d29, 0.94);

@@ -11,7 +11,6 @@
  * signage walks around the island between rescans.
  */
 
-import { hashText, pickIndex } from "../math/hash";
 import {
   HALF_TILE_HEIGHT,
   HALF_TILE_WIDTH,
@@ -83,20 +82,18 @@ export interface Sponsor {
  */
 export const SPONSORS: readonly Sponsor[] = [
   {
-    id: "pushtoprod",
-    name: "PushToProd.art",
-    url: "https://pushtoprod-india.devfolio.co/overview",
-    artwork: "/ads/pushtoprod.webp",
-    size: "square",
-    background: "#f4ede1",
+    id: "grounded-landscape",
+    name: "Grounded resilience landscape",
+    artwork: "/ads/grounded-roadside-landscape.png",
+    size: "small",
+    background: "#78bde8",
   },
   {
-    id: "basecamp",
-    name: "Basecamp",
-    url: "https://www.basecampblr.com/",
-    artwork: "/ads/basecamp.png",
-    size: "small",
-    background: "#283441",
+    id: "grounded-square",
+    name: "Grounded Resilience Lab",
+    artwork: "/ads/grounded-roadside-square.png",
+    size: "square",
+    background: "#123d24",
   },
 ];
 
@@ -136,8 +133,8 @@ export function halfSpanOf(panelWidth: number): number {
 /**
  * Perimeter slots for advertising boards around the city edge.
  *
- * - PushToProd sits along the northern countryside edge, facing the city.
- * - Basecamp sits along the roadside grass near the naval base dock road approach.
+ * - The landscape Grounded campaign sits along the northern countryside edge.
+ * - The square Resilience Lab identity sits beside the dock-road approach.
  */
 export function adBillboardSlots(width: number, height: number): BillboardSlot[] {
   const safeWidth = Math.max(1, Math.round(width));
@@ -317,11 +314,15 @@ export interface BillboardPlacement {
   sponsor: Sponsor;
 }
 
-/** Repository identity for the airport board. `url` absent means demo mode. */
+/** Repository identity for the airport board. `url` absent means scenery. */
 export interface BillboardRepo {
   owner: string;
   name: string;
   url?: string;
+  /** Optional campaign artwork replacing the generated owner/name treatment. */
+  artwork?: string;
+  /** Letterbox colour used when the artwork and board differ in aspect. */
+  background?: string;
 }
 
 /**
@@ -333,29 +334,23 @@ export type BillboardTarget =
   | { kind: "ad"; sponsorId: string; url: string };
 
 /**
- * Pairs each slot with a sponsor, deterministically from `seed` (the repo key).
+ * Pairs each slot with the first unused creative made for that board shape.
  *
  * Sponsors are drawn without replacement so no repo shows the same advertiser
- * twice; once the roster is exhausted it refills, which only happens if there
- * are ever more boards than sponsors.
+ * twice; the fixed shape matching keeps every campaign in its intended frame.
  */
 export function assignSponsors(
   slots: readonly BillboardSlot[],
-  seed: string,
+  _seed: string,
 ): BillboardPlacement[] {
   const placements: BillboardPlacement[] = [];
-  const byId = new Map(SPONSORS.map((s) => [s.id, s]));
+  const unused = [...SPONSORS];
 
-  for (const [index, slot] of slots.entries()) {
-    let sponsor: Sponsor | undefined;
-    if (slot.size === "square" && byId.has("basecamp")) {
-      sponsor = byId.get("basecamp");
-    } else if (index === 0 && byId.has("pushtoprod")) {
-      sponsor = byId.get("pushtoprod");
-    } else {
-      const choice = pickIndex(hashText(seed, index), SPONSORS.length);
-      sponsor = SPONSORS[choice] as Sponsor;
-    }
+  for (const slot of slots) {
+    const matchingIndex = unused.findIndex(
+      (candidate) => (candidate.size ?? "small") === slot.size,
+    );
+    const sponsor = unused.splice(matchingIndex >= 0 ? matchingIndex : 0, 1)[0];
     if (sponsor) {
       placements.push({
         slot: { ...slot, size: sponsor.size ?? slot.size },

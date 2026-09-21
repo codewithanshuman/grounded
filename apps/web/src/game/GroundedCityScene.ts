@@ -78,7 +78,12 @@ export class GroundedCityScene extends WorldScene {
     this.latestWorld = world;
     const snapshot = snapshotFor(world);
     super.setWorld(snapshot, "main", "grounded-jaipur");
-    this.setRepoIdentity({ owner: "Grounded", name: "Jaipur Resilience" });
+    this.setRepoIdentity({
+      owner: "Grounded",
+      name: "Jaipur Resilience",
+      artwork: "/ads/grounded-airport.png",
+      background: "#163e2c",
+    });
     this.drawForestReserve();
     this.syncEvidenceTrees(world.trees);
     this.syncFacilityLabels();

@@ -83,7 +83,9 @@ export class WorldBillboardManager {
     if (
       this.repoIdentity?.owner === repo?.owner &&
       this.repoIdentity?.name === repo?.name &&
-      this.repoIdentity?.url === repo?.url
+      this.repoIdentity?.url === repo?.url &&
+      this.repoIdentity?.artwork === repo?.artwork &&
+      this.repoIdentity?.background === repo?.background
     ) {
       return;
     }
@@ -204,6 +206,62 @@ export class WorldBillboardManager {
    */
   private ensureRepoPanel(slot: BillboardSlot, currentWorldKey?: string): void {
     const repo = this.repoIdentity;
+
+    if (repo?.artwork) {
+      const key = `billboard:panel:repo-artwork:${repo.name}:${slot.size}:${slot.facing}`;
+      if (this.scene.textures.exists(key)) {
+        this.attachBillboardPanel("repo", key);
+        return;
+      }
+
+      const artworkKey = `repo-artwork:${repo.name}`;
+      const artworkUrl = repo.artwork;
+      void this.loadImageTexture(artworkKey, artworkUrl).then((loaded) => {
+        if (!loaded) {
+          console.error(`Repository billboard artwork failed to load: ${artworkUrl}`);
+          return;
+        }
+        if (
+          !this.scene.scene?.isActive() ||
+          !this.billboardFrames.has("repo") ||
+          this.repoIdentity?.artwork !== artworkUrl
+        ) {
+          return;
+        }
+        const artwork = drawableSource(this.scene.textures.get(artworkKey));
+        if (!artwork) {
+          console.error(`Repository billboard artwork is not drawable: ${artworkUrl}`);
+          return;
+        }
+        createBillboardPanelTexture(
+          this.scene,
+          key,
+          slot.size,
+          slot.facing,
+          (context, area) => {
+            context.fillStyle = repo.background ?? "#163e2c";
+            context.fillRect(0, 0, area.width, area.height);
+            const scale = Math.min(
+              area.width / artwork.width,
+              area.height / artwork.height,
+            );
+            const drawWidth = artwork.width * scale;
+            const drawHeight = artwork.height * scale;
+            const resampled = downscaleForPanel(artwork, drawWidth, drawHeight);
+            context.drawImage(
+              resampled,
+              (area.width - drawWidth) / 2,
+              (area.height - drawHeight) / 2,
+              drawWidth,
+              drawHeight,
+            );
+          },
+        );
+        this.attachBillboardPanel("repo", key);
+      });
+      return;
+    }
+
     let owner = repo?.owner ?? "";
     let name = repo?.name ?? currentWorldKey ?? "";
 

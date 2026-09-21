@@ -35,6 +35,7 @@ export const WORLD_TEXTURES = {
   quay: "world-port-quay",
   airportTerminal: "world-airport-terminal",
   airportTower: "world-airport-tower",
+  aircraft: "world-airport-aircraft",
   portWarehouse: "world-port-warehouse",
   cargoCrane: "world-cargo-crane",
   cargoShip: "world-cargo-ship",
@@ -418,6 +419,30 @@ function bakeDistrictFacilities(scene: Phaser.Scene): void {
     g.fillStyle(0x245d8d, 1); g.fillPoints([new Phaser.Geom.Point(50, 48), new Phaser.Geom.Point(72, 58), new Phaser.Geom.Point(50, 70), new Phaser.Geom.Point(28, 58)], true);
     g.fillStyle(0x8bd4ed, 1); g.fillRect(32, 55, 36, 10); g.fillStyle(0xe8b442, 1); g.fillRect(47, 34, 4, 16); g.fillTriangle(49, 29, 61, 34, 49, 39);
     finish(g, WORLD_TEXTURES.airportTower, 96, 150);
+  }
+  {
+    /* Top-down isometric commuter aircraft, matching the reference airport's
+       authored fleet layer instead of leaving the runway as an empty stripe. */
+    const g = graphics(scene); const x = 88, y = 54;
+    g.fillStyle(0x173b2d, .18); g.fillEllipse(x + 5, y + 25, 118, 19);
+    g.fillStyle(0xf5f7f2, 1);
+    g.fillPoints([
+      new Phaser.Geom.Point(18, y), new Phaser.Geom.Point(75, y - 8),
+      new Phaser.Geom.Point(139, y + 5), new Phaser.Geom.Point(75, y + 11),
+    ], true);
+    g.fillPoints([
+      new Phaser.Geom.Point(73, y + 3), new Phaser.Geom.Point(102, y - 27),
+      new Phaser.Geom.Point(116, y - 23), new Phaser.Geom.Point(94, y + 8),
+      new Phaser.Geom.Point(116, y + 30), new Phaser.Geom.Point(102, y + 32),
+    ], true);
+    g.fillStyle(0x2b6da4, 1); g.fillRect(36, y - 3, 84, 5);
+    g.fillStyle(0x78c9e6, 1); for (let i = 0; i < 5; i++) g.fillCircle(57 + i * 12, y + 4, 2);
+    g.fillStyle(0xe2ad38, 1); g.fillTriangle(119, y - 8, 143, y + 5, 119, y + 8);
+    g.lineStyle(2, 0xa9bbc0, .9); g.strokePoints([
+      new Phaser.Geom.Point(18, y), new Phaser.Geom.Point(75, y - 8),
+      new Phaser.Geom.Point(139, y + 5), new Phaser.Geom.Point(75, y + 11),
+    ], true);
+    finish(g, WORLD_TEXTURES.aircraft, 164, 100);
   }
   {
     const g = graphics(scene); const x = 70, ground = 103;

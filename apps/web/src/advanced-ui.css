@@ -684,6 +684,15 @@ body {
   gap: 16px;
 }
 
+/* The digital twin is the product, not a thumbnail beside the controls.  The
+   reference city earns its clarity by giving the map the full working width;
+   keep the hazard deck beneath it so the island can retain a readable scale. */
+.overview-grid > .world-card { grid-column: 1 / -1; }
+.overview-grid > .hazard-column {
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) 350px;
+}
+
 .world-card,
 .hazard-card,
 .analysis-card {
@@ -707,7 +716,7 @@ body {
 
 .light-world {
   position: relative;
-  height: 520px;
+  height: clamp(660px, 68vh, 860px);
   overflow: hidden;
   background: linear-gradient(180deg, #2e9fe0, #217fb5);
 }
@@ -1466,7 +1475,7 @@ body {
 
 .world-card { position: relative; }
 .light-world {
-  height: 590px;
+  height: clamp(660px, 68vh, 860px);
   background: radial-gradient(circle at 50% 18%, rgba(126,211,247,.65), transparent 40%), linear-gradient(180deg, #2da5e8, #1678b5);
   box-shadow: inset 0 0 0 1px rgba(255,255,255,.14);
 }
@@ -1523,7 +1532,8 @@ body {
 @media (max-width: 1100px) {
   .lab-content > .field-banner { grid-template-columns: minmax(330px,.9fr) minmax(360px,1.1fr); }
   .hero-artwork { left: 43%; }
-  .light-world { height: 520px; }
+  .light-world { height: 620px; }
+  .overview-grid > .hazard-column { grid-template-columns: 1fr 300px; }
   .world-provenance-strip { grid-template-columns: repeat(2, minmax(0,1fr)); }
   .world-provenance-strip > div:nth-child(3) { border-left: 0; border-top: 1px solid #e1e6dc; }
   .world-provenance-strip > div:nth-child(4) { border-top: 1px solid #e1e6dc; }
@@ -1534,6 +1544,7 @@ body {
   .hero-artwork { left: 22%; opacity: .66; }
   .hero-artwork::after { background: linear-gradient(90deg, rgba(248,247,239,.96), rgba(248,247,239,.6) 68%, transparent); }
   .light-world { height: 420px; }
+  .overview-grid > .hazard-column { grid-template-columns: 1fr; }
   .world-provenance-strip { grid-template-columns: 1fr; }
   .world-provenance-strip > div { min-height: 58px; border-left: 0; border-top: 1px solid #e1e6dc; }
   .world-provenance-strip > div:first-child { border-top: 0; }

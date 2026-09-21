@@ -63,6 +63,11 @@ try {
   await capture("01-grounded-hero");
   await capture("02-living-digital-twin", page.locator(".overview-grid"));
 
+  if (process.env.GROUNDED_CAPTURE_ONLY_TWIN === "1") {
+    await browser.close();
+    process.exit(0);
+  }
+
   await page.locator(".run-controls select").nth(1).selectOption("500");
   await page.getByRole("button", { name: /Extreme Combined Event/ }).click();
   await page.getByRole("button", { name: /RUN SIMULATION/ }).click();

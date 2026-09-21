@@ -9,6 +9,17 @@ import runnerUrl from "../../../../assets/world-runner.png";
 
 export const FOREST_READY_EVENT = "forest-ready";
 
+/* The evidence protocol intentionally stores growth in a compact 24×24 field,
+   but the visible operating district is larger.  This mirrors the reference
+   city's authored island: verified objects stay on their stable coordinates
+   while contextual neighbourhoods, the airport and the port complete the
+   world around them. */
+const CITY_GRID_SIZE = 30;
+const WORLD_MIN_X = -13;
+const WORLD_MIN_Y = -6;
+const WORLD_MAX_X = 37;
+const WORLD_MAX_Y = 35;
+
 export type ForestInspection = {
   kind: "tree" | "building";
   title: string;
@@ -84,24 +95,26 @@ export class ForestScene extends Phaser.Scene {
   }
 
   private drawGround(): void {
-    const margin = 4;
-    for (let gx = -11; gx < FOREST_GRID_SIZE + margin; gx++) {
-      for (let gy = -margin; gy < FOREST_GRID_SIZE + margin; gy++) {
-        const inside = gx >= 0 && gy >= 0 && gx < FOREST_GRID_SIZE && gy < FOREST_GRID_SIZE;
+    for (let gx = WORLD_MIN_X; gx <= WORLD_MAX_X; gx++) {
+      for (let gy = WORLD_MIN_Y; gy <= WORLD_MAX_Y; gy++) {
+        const inside = gx >= 0 && gy >= 0 && gx < CITY_GRID_SIZE && gy < CITY_GRID_SIZE;
         const reserve = isForestReserveCell(gx, gy);
         const bridge = isForestBridgeCell(gx, gy);
-        const edge = inside ? Math.min(gx, gy, FOREST_GRID_SIZE - 1 - gx, FOREST_GRID_SIZE - 1 - gy) : reserve ? (isForestReserveEdge(gx, gy) ? 0 : 3) : -1;
+        const edge = inside ? Math.min(gx, gy, CITY_GRID_SIZE - 1 - gx, CITY_GRID_SIZE - 1 - gy) : reserve ? (isForestReserveEdge(gx, gy) ? 0 : 3) : -1;
         const seed = hashCell(gx, gy);
         const inlet = inside && edge === 0 && seed % 5 === 0;
         const runway = isAirportRunwayCell(gx, gy);
+        const airportApron = isAirportApronCell(gx, gy);
         const quay = isPortApronCell(gx, gy);
-        const isWater = ((!inside && !reserve && !bridge) || inlet) && !runway && !quay;
-        const isSand = (inside || reserve) && !inlet && !bridge && !runway && !quay && (edge <= 1 || (edge === 2 && seed % 7 === 0));
+        const isWater = ((!inside && !reserve && !bridge) || inlet) && !runway && !airportApron && !quay;
+        const isSand = (inside || reserve) && !inlet && !bridge && !runway && !airportApron && !quay && (edge <= 1 || (edge === 2 && seed % 7 === 0));
         const isRoad = inside && edge > 1 && isRoadCell(gx, gy);
-        const isPlaza = inside && gx >= 10 && gx <= 13 && gy >= 10 && gy <= 13;
+        const isPlaza = inside && isCivicPlazaCell(gx, gy);
         const isTrail = reserve && !isSand && isForestTrailCell(gx, gy);
         const key = runway
           ? WORLD_TEXTURES.runway
+          : airportApron
+            ? WORLD_TEXTURES.quay
           : quay
             ? WORLD_TEXTURES.quay
         : isWater
@@ -121,7 +134,7 @@ export class ForestScene extends Phaser.Scene {
         const img = this.add.image(x, y, key).setOrigin(0.5, 0.5);
         img.setDepth(-2000 + (gx + gy) * 0.01);
 
-        if (inside && !isWater && !isSand && !isRoad && !isPlaza && !runway && !quay && edge > 2 && seed % 7 === 0) {
+        if (inside && !isWater && !isSand && !isRoad && !isPlaza && !runway && !airportApron && !quay && edge > 2 && seed % 7 === 0) {
           const propKeys = [WORLD_TEXTURES.pine, WORLD_TEXTURES.bush, WORLD_TEXTURES.rock] as const;
           this.add.image(x, y + HALF_H, propKeys[(seed >>> 5) % propKeys.length]!).setOrigin(0.5, 1).setDepth(depthOf(gx, gy) - 0.5).setScale(0.82);
         }
@@ -130,8 +143,8 @@ export class ForestScene extends Phaser.Scene {
         }
       }
     }
-    const centre = toScreen(12, 13);
-    this.add.image(centre.x, centre.y + HALF_H, WORLD_TEXTURES.fountain).setOrigin(0.5, 1).setDepth(depthOf(12, 13) - 1).setScale(0.9);
+    const centre = toScreen(17, 15);
+    this.add.image(centre.x, centre.y + HALF_H, WORLD_TEXTURES.fountain).setOrigin(0.5, 1).setDepth(depthOf(17, 15) - 1).setScale(0.9);
   }
 
   private drawForestReserve(): void {
@@ -143,11 +156,12 @@ export class ForestScene extends Phaser.Scene {
       for (let gy = FOREST_RESERVE.minY; gy <= FOREST_RESERVE.maxY; gy++) {
         if (!isForestReserveCell(gx, gy) || isForestReserveEdge(gx, gy) || isForestTrailCell(gx, gy) || reserved.has(`${gx}:${gy}`)) continue;
         const seed = hashCell(gx, gy);
-        if (seed % 4 === 0) continue;
+        /* Deliberate groves and clearings, not a tree on nearly every tile. */
+        if (seed % 10 < 5) continue;
         const species = (["tree-oak", "tree-flowering", "tree-ancient", WORLD_TEXTURES.pine] as const)[(seed >>> 5) % 4]!;
         const point = toScreen(gx, gy);
         this.add.image(point.x, point.y + HALF_H, species).setOrigin(0.5, 1).setScale(.58 + ((seed >>> 9) % 22) / 100).setDepth(depthOf(gx, gy) + .35);
-        if (seed % 7 === 0) {
+        if (seed % 13 === 0) {
           this.add.image(point.x + 18, point.y + HALF_H + 2, WORLD_TEXTURES.bush).setOrigin(0.5, 1).setScale(.62).setDepth(depthOf(gx, gy) + .4);
         }
       }
@@ -161,13 +175,13 @@ export class ForestScene extends Phaser.Scene {
     const sensorImage = this.add.image(sensor.x, sensor.y + HALF_H, WORLD_TEXTURES.forestSensor).setOrigin(0.5, 1).setScale(.88).setDepth(depthOf(-4, 10) + .8);
     this.addWorldLabel(sensorImage.x, sensorImage.getTopCenter().y - 4, "CANOPY SENSOR", depthOf(-4, 10) + 3);
 
-    const bridge = toScreen(-1, 9);
+    const bridge = toScreen(-1, 10);
     const bridgeLabel = this.add.text(bridge.x, bridge.y - 9, "CANOPY LINK  ·  PEDESTRIAN + EV", {
       fontFamily: "IBM Plex Mono, monospace", fontSize: "7px", color: "#f3f7de", backgroundColor: "#153e2edb", padding: { x: 6, y: 3 },
     }).setOrigin(.5, 1).setDepth(depthOf(-1, 9) + 4);
     bridgeLabel.setShadow(0, 3, "#082b20", 6, true, true);
 
-    for (const [gx, gy, delay] of [[-7, 9, 0], [-6, 13, 370], [-4, 14, 740], [-6, 16, 1110]] as const) {
+    for (const [gx, gy, delay] of [[-9, 7, 0], [-8, 13, 370], [-5, 16, 740], [-9, 18, 1110]] as const) {
       const point = toScreen(gx, gy);
       const light = this.add.image(point.x, point.y, WORLD_TEXTURES.energyPulse).setScale(.42).setAlpha(.25).setDepth(depthOf(gx, gy) + 3);
       this.tweens.add({ targets: light, y: light.y - 11, alpha: .94, duration: 1150, delay, yoyo: true, repeat: -1, ease: "Sine.InOut" });
@@ -183,10 +197,10 @@ export class ForestScene extends Phaser.Scene {
 
   private drawInfrastructure(): void {
     const sites = [
-      { cell: [6, 6] as const, key: WORLD_TEXTURES.hospital, scale: 0.94, label: "CRITICAL CARE" },
-      { cell: [2, 12] as const, key: WORLD_TEXTURES.solarArray, scale: 0.98, label: "1.8 MW SOLAR" },
-      { cell: [7, 17] as const, key: WORLD_TEXTURES.battery, scale: 1.02, label: "12 MWh STORAGE" },
-      { cell: [21, 17] as const, key: WORLD_TEXTURES.substation, scale: 0.98, label: "GRID INTERTIE" },
+      { cell: [7, 7] as const, key: WORLD_TEXTURES.hospital, scale: 0.94, label: "CRITICAL CARE" },
+      { cell: [2, 17] as const, key: WORLD_TEXTURES.solarArray, scale: 0.98, label: "1.8 MW SOLAR" },
+      { cell: [19, 25] as const, key: WORLD_TEXTURES.battery, scale: 1.02, label: "12 MWh STORAGE" },
+      { cell: [26, 19] as const, key: WORLD_TEXTURES.substation, scale: 0.98, label: "GRID INTERTIE" },
     ];
     sites.forEach(({ cell: [gx, gy], key, scale, label }) => {
       const p = toScreen(gx, gy);
@@ -198,29 +212,29 @@ export class ForestScene extends Phaser.Scene {
       plate.setShadow(0, 4, "#082b20", 8, true, true);
     });
 
-    for (const [gx, gy, scale] of [[1, 11, 0.7], [3, 11, 0.7], [2, 13, 0.62]] as const) {
+    for (const [gx, gy, scale] of [[1, 16, 0.7], [3, 16, 0.7], [2, 18, 0.62]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.solarArray).setOrigin(0.5, 1).setScale(scale).setDepth(depthOf(gx, gy) + 0.25);
     }
-    for (const [gx, gy] of [[6, 18], [8, 18]] as const) {
+    for (const [gx, gy] of [[18, 26], [20, 26]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.battery).setOrigin(0.5, 1).setScale(0.68).setDepth(depthOf(gx, gy) + 0.26);
     }
 
-    for (const [gx, gy] of [[2, 3], [2, 19], [21, 4], [21, 20], [12, 3], [13, 20]] as const) {
+    for (const [gx, gy] of [[2, 3], [2, 27], [27, 4], [27, 26], [14, 3], [15, 27]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.palm).setOrigin(0.5, 1).setScale(1.05).setDepth(depthOf(gx, gy) + 0.25);
     }
-    for (const [gx, gy] of [[10, 10], [13, 10], [10, 13], [13, 13]] as const) {
+    for (const [gx, gy] of [[12, 12], [17, 12], [12, 17], [17, 17]] as const) {
       const p = toScreen(gx, gy);
       this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.bench).setOrigin(0.5, 1).setScale(0.72).setDepth(depthOf(gx, gy) + 0.2);
     }
 
-    const dock = toScreen(23, 14);
-    this.add.image(dock.x + 22, dock.y + HALF_H + 5, WORLD_TEXTURES.dock).setOrigin(0.5, 0.5).setScale(0.82).setAngle(-27).setDepth(depthOf(23, 14) + 0.1);
-    const lighthouse = toScreen(24, 8);
-    this.add.image(lighthouse.x, lighthouse.y + HALF_H, WORLD_TEXTURES.lighthouse).setOrigin(0.5, 1).setScale(0.78).setDepth(depthOf(24, 8) + 0.35);
-    for (const [gx, gy] of [[-2, 8], [-2, 16], [25, 8], [25, 16]] as const) {
+    const dock = toScreen(32, 12);
+    this.add.image(dock.x + 22, dock.y + HALF_H + 5, WORLD_TEXTURES.dock).setOrigin(0.5, 0.5).setScale(0.82).setAngle(-27).setDepth(depthOf(32, 12) + 0.1);
+    const lighthouse = toScreen(32, 9);
+    this.add.image(lighthouse.x, lighthouse.y + HALF_H, WORLD_TEXTURES.lighthouse).setOrigin(0.5, 1).setScale(0.78).setDepth(depthOf(32, 9) + 0.35);
+    for (const [gx, gy] of [[-2, 8], [-2, 20], [34, 8], [34, 24]] as const) {
       const p = toScreen(gx, gy);
       const buoy = this.add.image(p.x, p.y + HALF_H, WORLD_TEXTURES.buoy).setOrigin(0.5, 1).setDepth(-700 + gy);
       this.tweens.add({ targets: buoy, y: buoy.y - 4, duration: 1100 + gy * 17, yoyo: true, repeat: -1, ease: "Sine.InOut" });
@@ -228,22 +242,22 @@ export class ForestScene extends Phaser.Scene {
   }
 
   private drawCityContext(): void {
-    for (let gx = 2; gx < FOREST_GRID_SIZE - 2; gx++) {
-      for (let gy = 2; gy < FOREST_GRID_SIZE - 2; gy++) {
-        if (isRoadCell(gx, gy) || isCivicPlazaCell(gx, gy) || CITY_CONTEXT_RESERVED.has(`${gx}:${gy}`)) continue;
+    for (let gx = 2; gx < CITY_GRID_SIZE - 2; gx++) {
+      for (let gy = 2; gy < CITY_GRID_SIZE - 2; gy++) {
+        if (isRoadCell(gx, gy) || !isContextPlotCell(gx, gy) || isCivicPlazaCell(gx, gy) || CITY_CONTEXT_RESERVED.has(`${gx}:${gy}`)) continue;
         const seed = hashCell(gx, gy);
-        if (seed % 100 >= 63) continue;
+        if (seed % 100 >= 78) continue;
 
-        const coreDistance = Math.abs(gx - 12) + Math.abs(gy - 11);
-        const central = gx >= 6 && gx <= 18 && gy >= 4 && gy <= 18;
-        const industrial = gx >= 15 && gy >= 15;
-        const key = industrial && seed % 4 === 0
+        const coreDistance = Math.abs(gx - 15) + Math.abs(gy - 14);
+        const central = gx >= 8 && gx <= 22 && gy >= 7 && gy <= 21;
+        const industrial = gx >= 20 && gy >= 20;
+        const key = industrial && seed % 3 === 0
           ? WORLD_TEXTURES.cityUtility
-          : central && (coreDistance < 8 || seed % 7 === 0)
+          : coreDistance < 6
             ? (seed % 3 === 0 ? WORLD_TEXTURES.cityTower : WORLD_TEXTURES.cityOffice)
-            : seed % 4 === 0
-              ? WORLD_TEXTURES.cityOffice
-              : seed % 2 === 0
+            : central && coreDistance < 13
+              ? (seed % 3 === 0 ? WORLD_TEXTURES.cityOffice : WORLD_TEXTURES.cityTownhouse)
+              : seed % 4 === 0
                 ? WORLD_TEXTURES.cityTownhouse
                 : WORLD_TEXTURES.cityHouse;
         const scale = key === WORLD_TEXTURES.cityTower ? 0.72 : key === WORLD_TEXTURES.cityOffice ? 0.76 : 0.8;
@@ -259,49 +273,54 @@ export class ForestScene extends Phaser.Scene {
   }
 
   private drawStrategicFacilities(): void {
-    const civic = toScreen(11, 11);
+    const civic = toScreen(14, 14);
     const civicHall = this.add.image(civic.x, civic.y + HALF_H, WORLD_TEXTURES.civicHall)
-      .setOrigin(0.5, 1).setScale(0.82).setDepth(depthOf(11, 11) + 0.7);
-    this.addWorldLabel(civicHall.x, civicHall.getTopCenter().y - 5, "RESILIENCE OPERATIONS", depthOf(11, 11) + 4);
+      .setOrigin(0.5, 1).setScale(0.9).setDepth(depthOf(14, 14) + 0.7);
+    this.addWorldLabel(civicHall.x, civicHall.getTopCenter().y - 5, "RESILIENCE OPERATIONS", depthOf(14, 14) + 4);
 
-    const terminal = toScreen(1, 20);
+    const terminal = toScreen(-2, 29);
     const terminalImage = this.add.image(terminal.x, terminal.y + HALF_H, WORLD_TEXTURES.airportTerminal)
-      .setOrigin(0.5, 1).setScale(0.78).setDepth(depthOf(1, 20) + 0.55);
-    const tower = toScreen(3, 20);
+      .setOrigin(0.5, 1).setScale(1.72).setDepth(depthOf(-2, 29) + 0.55);
+    const tower = toScreen(4, 30);
     this.add.image(tower.x, tower.y + HALF_H, WORLD_TEXTURES.airportTower)
-      .setOrigin(0.5, 1).setScale(0.72).setDepth(depthOf(3, 20) + 0.65);
-    this.addWorldLabel(terminalImage.x - 12, terminalImage.getTopCenter().y - 2, "EMERGENCY AIRLINK", depthOf(1, 20) + 4);
+      .setOrigin(0.5, 1).setScale(1.02).setDepth(depthOf(4, 30) + 0.65);
+    for (const [gx, gy, scale, flip] of [[8, 31.4, .72, false], [1.5, 29.1, .62, true]] as const) {
+      const plane = toScreen(gx, gy);
+      this.add.image(plane.x, plane.y + HALF_H, WORLD_TEXTURES.aircraft)
+        .setOrigin(.5, .5).setScale(scale).setFlipX(flip).setDepth(depthOf(gx, gy) + .8);
+    }
+    this.addWorldLabel(terminalImage.x - 12, terminalImage.getTopCenter().y - 2, "EMERGENCY AIRLINK", depthOf(-2, 29) + 4);
 
-    const warehouse = toScreen(20, 23);
+    const warehouse = toScreen(31, 14);
     const warehouseImage = this.add.image(warehouse.x, warehouse.y + HALF_H, WORLD_TEXTURES.portWarehouse)
-      .setOrigin(0.5, 1).setScale(0.86).setDepth(depthOf(20, 23) + 0.55);
-    for (const [gx, gy, flip] of [[22, 24, false], [24, 24, true]] as const) {
+      .setOrigin(0.5, 1).setScale(1).setDepth(depthOf(31, 14) + 0.55);
+    for (const [gx, gy, flip] of [[33, 16, false], [33, 19, true], [33, 22, false]] as const) {
       const point = toScreen(gx, gy);
       this.add.image(point.x, point.y + HALF_H, WORLD_TEXTURES.cargoCrane)
-        .setOrigin(0.5, 1).setScale(0.68).setFlipX(flip).setDepth(depthOf(gx, gy) + 0.7);
+        .setOrigin(0.5, 1).setScale(0.8).setFlipX(flip).setDepth(depthOf(gx, gy) + 0.7);
     }
-    const ship = toScreen(25, 26);
+    const ship = toScreen(36, 19);
     const cargo = this.add.image(ship.x, ship.y + HALF_H, WORLD_TEXTURES.cargoShip)
-      .setOrigin(0.5, 1).setScale(0.72).setDepth(depthOf(25, 26) + 0.6);
+      .setOrigin(0.5, 1).setScale(1.24).setDepth(depthOf(36, 19) + 0.6);
     this.tweens.add({ targets: cargo, y: cargo.y - 3, duration: 1750, yoyo: true, repeat: -1, ease: "Sine.InOut" });
-    this.addWorldLabel(warehouseImage.x + 30, warehouseImage.getTopCenter().y - 4, "RESILIENCE LOGISTICS", depthOf(20, 23) + 4);
+    this.addWorldLabel(warehouseImage.x + 30, warehouseImage.getTopCenter().y - 4, "RESILIENCE LOGISTICS", depthOf(31, 14) + 4);
   }
 
   private spawnEnergyNetwork(): void {
     const routes: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
-      [[2, 12], [4, 12], [4, 9], [6, 6]],
-      [[7, 17], [9, 17], [9, 14], [4, 14], [4, 12]],
-      [[21, 17], [19, 17], [19, 14], [9, 14]],
+      [[2, 17], [3, 17], [3, 9], [7, 7]],
+      [[19, 25], [21, 25], [21, 15], [3, 15], [3, 17]],
+      [[26, 19], [27, 19], [27, 15], [21, 15]],
     ];
     const lines = this.add.graphics().setDepth(-250);
     routes.forEach((route, routeIndex) => {
       const points = route.map(([gx, gy]) => { const p = toScreen(gx, gy); return new Phaser.Math.Vector2(p.x, p.y + HALF_H); });
-      lines.lineStyle(routeIndex === 0 ? 3 : 2, routeIndex === 0 ? 0xd8ff81 : 0xa7e7ff, 0.46);
+      lines.lineStyle(routeIndex === 0 ? 2 : 1, routeIndex === 0 ? 0xd8ff81 : 0xa7e7ff, 0.24);
       lines.strokePoints(points, false);
       const path = new Phaser.Curves.Path(points[0]!.x, points[0]!.y);
       points.slice(1).forEach((point) => path.lineTo(point.x, point.y));
       for (let pulseIndex = 0; pulseIndex < 3; pulseIndex++) {
-        const pulse = this.add.image(points[0]!.x, points[0]!.y, WORLD_TEXTURES.energyPulse).setScale(routeIndex === 0 ? 0.7 : 0.55).setDepth(500);
+        const pulse = this.add.image(points[0]!.x, points[0]!.y, WORLD_TEXTURES.energyPulse).setScale(routeIndex === 0 ? 0.48 : 0.38).setDepth(500);
         const tracker = { t: 0 };
         this.tweens.add({
           targets: tracker, t: 1, duration: 5200 + routeIndex * 900, delay: pulseIndex * 1600 + routeIndex * 500, repeat: -1, ease: "Linear",
@@ -313,20 +332,23 @@ export class ForestScene extends Phaser.Scene {
 
   private fitCamera(): void {
     const cam = this.cameras.main;
-    const left = toScreen(-11, 27).x;
-    const right = toScreen(27, -4).x;
-    const top = toScreen(-11, -4).y - 210;
-    const bottom = toScreen(27, 27).y + 90;
+    /* Frame the authored island rather than the entire generated ocean tile
+       buffer.  The reference world feels substantial because the operating
+       landmass—not empty water—owns the viewport. */
+    const left = toScreen(-8, 34).x;
+    const right = toScreen(32, -2).x;
+    const top = toScreen(-6, -6).y - 180;
+    const bottom = toScreen(36, 24).y + 80;
     const worldWidth = right - left;
     const worldHeight = bottom - top;
     const zoom = Math.min((cam.width * 0.96) / worldWidth, (cam.height * 0.94) / worldHeight);
-    cam.setZoom(Phaser.Math.Clamp(zoom, 0.29, 0.76));
+    cam.setZoom(Phaser.Math.Clamp(zoom, 0.2, 0.72));
     cam.centerOn((left + right) / 2, (top + bottom) / 2);
   }
 
   private spawnAmbientWorld(): void {
     const sparkleCells: Array<[number, number]> = [
-      [-3, 3], [-1, 8], [2, -2], [8, -3], [17, -2], [25, 4], [27, 10], [26, 19], [20, 26], [11, 27], [3, 25], [-3, 18],
+      [-7, 1], [-3, 8], [3, -3], [12, -4], [23, -2], [33, 4], [36, 11], [36, 25], [27, 34], [14, 35], [2, 33], [-8, 22],
     ];
     sparkleCells.forEach(([gx, gy], index) => {
       const p = toScreen(gx, gy);
@@ -335,9 +357,9 @@ export class ForestScene extends Phaser.Scene {
     });
 
     const boats: Array<{ from: [number, number]; to: [number, number]; duration: number; flip: boolean }> = [
-      { from: [-4, 2], to: [-4, 21], duration: 30000, flip: false },
-      { from: [2, -4], to: [21, -4], duration: 33000, flip: true },
-      { from: [27, 3], to: [27, 20], duration: 36000, flip: false },
+      { from: [-8, 1], to: [-9, 25], duration: 30000, flip: false },
+      { from: [2, -5], to: [25, -5], duration: 33000, flip: true },
+      { from: [36, 4], to: [36, 27], duration: 36000, flip: false },
     ];
     boats.forEach(({ from, to, duration, flip }, index) => {
       const start = toScreen(...from); const end = toScreen(...to);
@@ -383,16 +405,16 @@ export class ForestScene extends Phaser.Scene {
 
   private spawnTraffic(): void {
     const routes: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = [
-      [[4, 3], [4, 14], [19, 14], [19, 20]],
-      [[9, 20], [9, 4], [19, 4]],
-      [[20, 9], [4, 9], [4, 19]],
-      [[14, 3], [14, 19], [5, 19]],
-      [[3, 4], [19, 4], [19, 14]],
-      [[4, 19], [19, 19], [19, 5]],
-      [[9, 3], [9, 19], [4, 19]],
-      [[19, 4], [19, 19], [9, 19]],
-      [[3, 9], [19, 9], [19, 4]],
-      [[14, 4], [14, 19], [19, 19]],
+      [[3, 3], [3, 27], [27, 27]],
+      [[9, 27], [9, 3], [27, 3]],
+      [[27, 9], [3, 9], [3, 27]],
+      [[15, 3], [15, 27], [3, 27]],
+      [[3, 3], [27, 3], [27, 15]],
+      [[3, 21], [27, 21], [27, 3]],
+      [[9, 3], [9, 27], [3, 27]],
+      [[21, 3], [21, 27], [9, 27]],
+      [[3, 15], [27, 15], [27, 3]],
+      [[15, 3], [15, 27], [27, 27]],
     ];
     routes.forEach((route, index) => {
       const points = route.map(([gx, gy]) => { const p = toScreen(gx, gy); return new Phaser.Math.Vector2(p.x, p.y + HALF_H); });
@@ -429,7 +451,7 @@ export class ForestScene extends Phaser.Scene {
     this.placed.add(tree.id);
     this.clearContextAt(tree.gx, tree.gy);
     const { x, y } = toScreen(tree.gx, tree.gy);
-    const img = this.add.image(x, y, `tree-${tree.species}`).setOrigin(0.5, 1);
+    const img = this.add.image(x, y, `tree-${tree.species}`).setOrigin(0.5, 1).setScale(.72);
     img.setDepth(depthOf(tree.gx, tree.gy));
     this.makeInspectable(img, {
       kind: "tree",
@@ -438,7 +460,7 @@ export class ForestScene extends Phaser.Scene {
       evidence: "Planted only after a completed, reproducible resilience run.",
       runId: tree.runId,
       occurredAt: tree.plantedAt,
-    });
+    }, .72);
     if (animate) {
       this.construction?.plantTree(x, y, depthOf(tree.gx, tree.gy), img);
     }
@@ -449,7 +471,7 @@ export class ForestScene extends Phaser.Scene {
     this.placed.add(building.id);
     this.clearContextAt(building.gx, building.gy);
     const { x, y } = toScreen(building.gx, building.gy);
-    const img = this.add.image(x, y, `bld-${building.kind}`).setOrigin(0.5, 1);
+    const img = this.add.image(x, y, `bld-${building.kind}`).setOrigin(0.5, 1).setScale(.82);
     img.setDepth(depthOf(building.gx, building.gy) + 0.5);
     this.makeInspectable(img, {
       kind: "building",
@@ -458,21 +480,21 @@ export class ForestScene extends Phaser.Scene {
       evidence: building.milestone,
       runId: building.runId,
       occurredAt: building.grownAt,
-    });
+    }, .82);
     if (animate) {
       this.construction?.completeBuilding(x, y, depthOf(building.gx, building.gy), img, building.milestone);
     }
   }
 
-  private makeInspectable(image: Phaser.GameObjects.Image, inspection: ForestInspection): void {
+  private makeInspectable(image: Phaser.GameObjects.Image, inspection: ForestInspection, baseScale = 1): void {
     image.setInteractive({ cursor: "pointer" });
     image.on("pointerover", () => {
       image.setTint(0xf1ffd2);
-      this.tweens.add({ targets: image, scaleX: 1.06, scaleY: 1.06, duration: 130, ease: "Sine.Out" });
+      this.tweens.add({ targets: image, scaleX: baseScale * 1.06, scaleY: baseScale * 1.06, duration: 130, ease: "Sine.Out" });
     });
     image.on("pointerout", () => {
       image.clearTint();
-      this.tweens.add({ targets: image, scaleX: 1, scaleY: 1, duration: 150, ease: "Sine.Out" });
+      this.tweens.add({ targets: image, scaleX: baseScale, scaleY: baseScale, duration: 150, ease: "Sine.Out" });
     });
     image.on("pointerup", (pointer: Phaser.Input.Pointer) => {
       const moved = Phaser.Math.Distance.Between(pointer.downX, pointer.downY, pointer.x, pointer.y);
@@ -507,20 +529,22 @@ function hashCell(gx: number, gy: number): number {
   return value >>> 0;
 }
 
-const ROAD_LINES = new Set([4, 9, 14, 19]);
+const ROAD_LINES = new Set([3, 9, 15, 21, 27]);
 
 const CITY_CONTEXT_RESERVED = new Set([
-  "6:6", "2:12", "7:17", "21:17", "1:11", "3:11", "2:13",
-  "6:18", "8:18", "11:11", "12:12", "12:13", "17:12",
-  "1:20", "3:20", "20:23", "22:24", "24:24",
+  "7:7", "2:17", "19:25", "26:19", "1:16", "3:16", "2:18",
+  "18:26", "20:26", "14:14", "17:15",
 ]);
 
-const FOREST_RESERVE = { minX: -8, maxX: -3, minY: 6, maxY: 17 } as const;
+const FOREST_RESERVE = { minX: -11, maxX: -3, minY: 4, maxY: 20 } as const;
 
 function isForestReserveCell(gx: number, gy: number): boolean {
-  const dx = (gx + 5.5) / 3.15;
-  const dy = (gy - 11.5) / 6.15;
-  return dx * dx + dy * dy <= 1;
+  /* A stepped, designed island outline like the reference countryside ring.
+     The broad centre and clipped ends create a readable reserve rather than
+     an amorphous oval of overlapping sprites. */
+  if (gx < FOREST_RESERVE.minX || gx > FOREST_RESERVE.maxX || gy < FOREST_RESERVE.minY || gy > FOREST_RESERVE.maxY) return false;
+  const rowInset = gy <= 5 || gy >= 19 ? 2 : gy <= 7 || gy >= 17 ? 1 : 0;
+  return gx >= FOREST_RESERVE.minX + rowInset && gx <= FOREST_RESERVE.maxX - (rowInset > 1 ? 1 : 0);
 }
 
 function isForestReserveEdge(gx: number, gy: number): boolean {
@@ -529,12 +553,12 @@ function isForestReserveEdge(gx: number, gy: number): boolean {
 }
 
 function isForestBridgeCell(gx: number, gy: number): boolean {
-  return gy === 9 && gx >= -3 && gx <= 3;
+  return gy === 10 && gx >= -3 && gx <= 3;
 }
 
 function isForestTrailCell(gx: number, gy: number): boolean {
   if (!isForestReserveCell(gx, gy)) return false;
-  return (gx === -5 && gy >= 8 && gy <= 15) || (gy === 9 && gx >= -6 && gx <= -3);
+  return (gx === -7 && gy >= 6 && gy <= 18) || (gy === 10 && gx >= -10 && gx <= -3) || (gy === 15 && gx >= -9 && gx <= -5);
 }
 
 function forestTrailMaskAt(gx: number, gy: number): number {
@@ -547,27 +571,37 @@ function isRoadCell(gx: number, gy: number): boolean {
 }
 
 function isCivicPlazaCell(gx: number, gy: number): boolean {
-  return gx >= 10 && gx <= 13 && gy >= 10 && gy <= 13;
+  return gx >= 12 && gx <= 17 && gy >= 12 && gy <= 17;
 }
 
 function isAirportRunwayCell(gx: number, gy: number): boolean {
-  return gy === 22 && gx >= -2 && gx <= 8;
+  return gy >= 31 && gy <= 32 && gx >= -7 && gx <= 15;
+}
+
+function isAirportApronCell(gx: number, gy: number): boolean {
+  return gx >= -5 && gx <= 7 && gy >= 27 && gy <= 30;
 }
 
 function isPortApronCell(gx: number, gy: number): boolean {
-  return gx >= 18 && gx <= 25 && gy >= 23 && gy <= 25;
+  return gx >= 30 && gx <= 33 && gy >= 12 && gy <= 24;
+}
+
+function isContextPlotCell(gx: number, gy: number): boolean {
+  const localX = ((gx - 3) % 6 + 6) % 6;
+  const localY = ((gy - 3) % 6 + 6) % 6;
+  return (localX === 1 || localX === 3 || localX === 5) && (localY === 1 || localY === 3 || localY === 5);
 }
 
 function roadClassAt(gx: number, gy: number): WorldRoadClass {
-  if (gx === 9 || gy === 9) return "boulevard";
-  if (gx === 14 || gy === 14) return "street";
+  if (gx === 15 || gy === 15) return "boulevard";
+  if (gx === 3 || gy === 3 || gx === 27 || gy === 27) return "street";
   return "lane";
 }
 
 function roadMaskAt(gx: number, gy: number): number {
   const road = (x: number, y: number) => {
-    if (x < 0 || y < 0 || x >= FOREST_GRID_SIZE || y >= FOREST_GRID_SIZE) return false;
-    const edge = Math.min(x, y, FOREST_GRID_SIZE - 1 - x, FOREST_GRID_SIZE - 1 - y);
+    if (x < 0 || y < 0 || x >= CITY_GRID_SIZE || y >= CITY_GRID_SIZE) return false;
+    const edge = Math.min(x, y, CITY_GRID_SIZE - 1 - x, CITY_GRID_SIZE - 1 - y);
     return edge > 1 && isRoadCell(x, y);
   };
   return (road(gx, gy - 1) ? 1 : 0) | (road(gx + 1, gy) ? 2 : 0) | (road(gx, gy + 1) ? 4 : 0) | (road(gx - 1, gy) ? 8 : 0);

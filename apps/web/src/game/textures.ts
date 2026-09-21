@@ -31,6 +31,14 @@ export const WORLD_TEXTURES = {
   forestCabin: "world-forest-cabin",
   forestSensor: "world-forest-sensor",
   lighthouse: "world-lighthouse",
+  runway: "world-airport-runway",
+  quay: "world-port-quay",
+  airportTerminal: "world-airport-terminal",
+  airportTower: "world-airport-tower",
+  portWarehouse: "world-port-warehouse",
+  cargoCrane: "world-cargo-crane",
+  cargoShip: "world-cargo-ship",
+  civicHall: "world-civic-hall",
   trafficCars: ["world-car-0", "world-car-1", "world-car-2", "world-car-3"],
   cityHouse: "world-city-house",
   cityTownhouse: "world-city-townhouse",
@@ -96,6 +104,7 @@ export function bakeTextures(scene: Phaser.Scene): void {
   bakeReserveTextures(scene);
   bakeProps(scene);
   bakeInfrastructure(scene);
+  bakeDistrictFacilities(scene);
   bakeTraffic(scene);
   bakeCityStructures(scene);
   bakeTrees(scene);
@@ -364,14 +373,103 @@ function bakeInfrastructure(scene: Phaser.Scene): void {
   }
 }
 
+/**
+ * Strategic edge facilities follow the same authored composition as the
+ * reference city's airport and harbour: infrastructure is part of the island
+ * and its road lattice, not a decorative icon floating beside it.
+ */
+function bakeDistrictFacilities(scene: Phaser.Scene): void {
+  {
+    const g = graphics(scene);
+    isoFace(g, 0x27333d, 1, isoDiamond(.5));
+    isoStroke(g, 0x56636c, .88, 1, isoDiamond(.5));
+    const a = isoAt([-.34, 0, 0]); const b = isoAt([.34, 0, 0]);
+    g.lineStyle(2, 0xf6f3df, .95); g.lineBetween(a.x, a.y, b.x, b.y);
+    for (const offset of [-.38, .38]) {
+      const p1 = isoAt([offset, -.17, 0]); const p2 = isoAt([offset, .17, 0]);
+      g.lineStyle(2, 0xf6f3df, .8); g.lineBetween(p1.x, p1.y, p2.x, p2.y);
+    }
+    finish(g, WORLD_TEXTURES.runway, HALF_W * 2, HALF_H * 2);
+  }
+  {
+    const g = graphics(scene);
+    isoFace(g, 0x505b61, 1, isoDiamond(.5));
+    isoStroke(g, 0x2e3a40, .82, 1, isoDiamond(.5));
+    const a = isoAt([-.5, .36, 0]); const b = isoAt([.5, .36, 0]);
+    g.lineStyle(3, 0xe3b84a, .95); g.lineBetween(a.x, a.y, b.x, b.y);
+    finish(g, WORLD_TEXTURES.quay, HALF_W * 2, HALF_H * 2);
+  }
+  {
+    const g = graphics(scene); const x = 96, ground = 108;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(x, ground, 142, 24);
+    g.fillStyle(0xb5c5ca, 1); g.fillPoints([new Phaser.Geom.Point(28, 68), new Phaser.Geom.Point(x, 90), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(28, 88)], true);
+    g.fillStyle(0xe8f1f2, 1); g.fillPoints([new Phaser.Geom.Point(164, 68), new Phaser.Geom.Point(x, 90), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(164, 88)], true);
+    g.fillStyle(0x6fc6e6, .9); g.fillPoints([new Phaser.Geom.Point(x, 27), new Phaser.Geom.Point(165, 66), new Phaser.Geom.Point(x, 91), new Phaser.Geom.Point(27, 66)], true);
+    g.lineStyle(2, 0xc7eff7, .8);
+    for (let i = -3; i <= 3; i++) g.lineBetween(x + i * 17, 39 + Math.abs(i) * 8, x + i * 9, 79 + Math.abs(i) * 4);
+    g.fillStyle(0x173c68, 1); g.fillRect(43, 83, 106, 8); g.fillStyle(0xf3b63d, 1); g.fillRect(31, 94, 18, 5);
+    finish(g, WORLD_TEXTURES.airportTerminal, 192, 122);
+  }
+  {
+    const g = graphics(scene); const x = 48, ground = 139;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(x, ground, 58, 13);
+    g.fillStyle(0xc8d8dc, 1); g.fillPoints([new Phaser.Geom.Point(36, 69), new Phaser.Geom.Point(50, 75), new Phaser.Geom.Point(50, ground), new Phaser.Geom.Point(36, 132)], true);
+    g.fillStyle(0xf0f5f2, 1); g.fillPoints([new Phaser.Geom.Point(64, 69), new Phaser.Geom.Point(50, 75), new Phaser.Geom.Point(50, ground), new Phaser.Geom.Point(64, 132)], true);
+    g.fillStyle(0x245d8d, 1); g.fillPoints([new Phaser.Geom.Point(50, 48), new Phaser.Geom.Point(72, 58), new Phaser.Geom.Point(50, 70), new Phaser.Geom.Point(28, 58)], true);
+    g.fillStyle(0x8bd4ed, 1); g.fillRect(32, 55, 36, 10); g.fillStyle(0xe8b442, 1); g.fillRect(47, 34, 4, 16); g.fillTriangle(49, 29, 61, 34, 49, 39);
+    finish(g, WORLD_TEXTURES.airportTower, 96, 150);
+  }
+  {
+    const g = graphics(scene); const x = 70, ground = 103;
+    g.fillStyle(0x173b2d, .22); g.fillEllipse(x, ground, 106, 18);
+    g.fillStyle(0x9eabb0, 1); g.fillPoints([new Phaser.Geom.Point(27, 62), new Phaser.Geom.Point(x, 83), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(27, 82)], true);
+    g.fillStyle(0xdbe5e5, 1); g.fillPoints([new Phaser.Geom.Point(113, 62), new Phaser.Geom.Point(x, 83), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(113, 82)], true);
+    g.fillStyle(0x294f69, 1); g.fillPoints([new Phaser.Geom.Point(x, 40), new Phaser.Geom.Point(116, 61), new Phaser.Geom.Point(x, 84), new Phaser.Geom.Point(24, 61)], true);
+    g.fillStyle(0xe4ad3e, 1); g.fillRect(30, 78, 13, 5); g.fillRect(48, 87, 13, 5); g.fillStyle(0x8bc9df, 1); g.fillRect(83, 82, 18, 12);
+    finish(g, WORLD_TEXTURES.portWarehouse, 140, 116);
+  }
+  {
+    const g = graphics(scene); const baseX = 74, ground = 167;
+    g.fillStyle(0x173b2d, .19); g.fillEllipse(baseX, ground, 82, 15);
+    g.lineStyle(5, 0xe3aa32, 1); g.lineBetween(47, ground, 47, 54); g.lineBetween(99, ground, 99, 54); g.lineBetween(47, 54, 99, 54); g.lineBetween(99, 54, 126, 83);
+    g.lineStyle(2, 0x8a651f, .95);
+    for (let y = 65; y < 155; y += 18) { g.lineBetween(47, y, 99, y + 18); g.lineBetween(99, y, 47, y + 18); }
+    g.lineStyle(2, 0x3f4b50, 1); g.lineBetween(111, 70, 111, 124); g.fillStyle(0x4e5d63, 1); g.fillRect(102, 122, 20, 11);
+    finish(g, WORLD_TEXTURES.cargoCrane, 150, 180);
+  }
+  {
+    const g = graphics(scene); const water = 104;
+    g.fillStyle(0xffffff, .2); g.fillEllipse(140, water + 9, 235, 26);
+    g.fillStyle(0x223847, 1); g.fillPoints([new Phaser.Geom.Point(22, 69), new Phaser.Geom.Point(254, 69), new Phaser.Geom.Point(224, water), new Phaser.Geom.Point(58, water)], true);
+    g.fillStyle(0xd94f45, 1); g.fillRect(59, 91, 164, 9);
+    const colors = [0xd96a45, 0x3d7fa6, 0xe3b346, 0x4b9366, 0x9b5a55];
+    for (let row = 0; row < 2; row++) for (let col = 0; col < 7; col++) {
+      g.fillStyle(colors[(row * 3 + col) % colors.length]!, 1); g.fillRect(63 + col * 22, 49 - row * 16, 19, 14);
+      g.lineStyle(1, 0x24343b, .45); g.strokeRect(63 + col * 22, 49 - row * 16, 19, 14);
+    }
+    g.fillStyle(0xe7eeec, 1); g.fillRect(207, 42, 31, 27); g.fillStyle(0x7dc5df, 1); g.fillRect(212, 47, 19, 8); g.fillStyle(0x26343b, 1); g.fillRect(216, 23, 4, 19);
+    finish(g, WORLD_TEXTURES.cargoShip, 280, 126);
+  }
+  {
+    const g = graphics(scene); const x = 110, ground = 184;
+    g.fillStyle(0x173b2d, .2); g.fillEllipse(x, ground, 164, 26);
+    g.fillStyle(0xc3ced0, 1); g.fillPoints([new Phaser.Geom.Point(38, 112), new Phaser.Geom.Point(x, 147), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(38, 149)], true);
+    g.fillStyle(0xf2f3ec, 1); g.fillPoints([new Phaser.Geom.Point(182, 112), new Phaser.Geom.Point(x, 147), new Phaser.Geom.Point(x, ground), new Phaser.Geom.Point(182, 149)], true);
+    g.fillStyle(0xe8e7dc, 1); g.fillPoints([new Phaser.Geom.Point(x, 75), new Phaser.Geom.Point(184, 111), new Phaser.Geom.Point(x, 148), new Phaser.Geom.Point(36, 111)], true);
+    g.fillStyle(0x214f86, 1); g.fillRect(47, 132, 17, 14); g.fillRect(76, 146, 17, 14); g.fillRect(130, 146, 17, 14); g.fillRect(158, 132, 17, 14);
+    g.fillStyle(0xffffff, 1); g.fillCircle(x, 69, 35); g.fillStyle(0xd8d7cb, 1); g.fillEllipse(x, 69, 71, 18); g.fillStyle(0xf2f1e9, 1); g.fillCircle(x, 63, 28); g.fillStyle(0xe1b447, 1); g.fillRect(x - 4, 22, 8, 38); g.fillTriangle(x, 14, x + 19, 24, x, 34);
+    finish(g, WORLD_TEXTURES.civicHall, 220, 198);
+  }
+}
+
 type CityPalette = { wall: number; wallShadow: number; roof: number; roofLight: number; roofShadow: number; trim: number; window: number; windowShadow: number };
 
 function bakeCityStructures(scene: Phaser.Scene): void {
-  bakeCityBuilding(scene, WORLD_TEXTURES.cityHouse, "house", 42, { wall: 0xf2e6cf, wallShadow: 0xc7b99f, roof: 0xb85c3b, roofLight: 0xd47a55, roofShadow: 0x85402c, trim: 0x76523a, window: 0x9ed9f2, windowShadow: 0x5a9fbc });
-  bakeCityBuilding(scene, WORLD_TEXTURES.cityTownhouse, "townhouse", 66, { wall: 0xdfead8, wallShadow: 0xa9bda5, roof: 0x477a5a, roofLight: 0x6b9f73, roofShadow: 0x2c563e, trim: 0xd8a447, window: 0xc4e8f4, windowShadow: 0x76aebe });
-  bakeCityBuilding(scene, WORLD_TEXTURES.cityOffice, "office", 104, { wall: 0xdde9ed, wallShadow: 0xa6bdc4, roof: 0x315e72, roofLight: 0x53849a, roofShadow: 0x203e4c, trim: 0x74a75c, window: 0xa8e0f4, windowShadow: 0x5892aa });
-  bakeCityBuilding(scene, WORLD_TEXTURES.cityTower, "tower", 154, { wall: 0xe8eadf, wallShadow: 0xbcc2b3, roof: 0x375f4b, roofLight: 0x5f8e71, roofShadow: 0x244233, trim: 0xd7a33f, window: 0xb9e6f4, windowShadow: 0x6ca0b2 });
-  bakeCityBuilding(scene, WORLD_TEXTURES.cityUtility, "utility", 70, { wall: 0xd7dedc, wallShadow: 0x9faaa9, roof: 0x59666e, roofLight: 0x7f8d94, roofShadow: 0x39434a, trim: 0xd5a33d, window: 0xa9d6e9, windowShadow: 0x608b9d });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityHouse, "house", 42, { wall: 0xe8f1f5, wallShadow: 0xaec5cf, roof: 0x2e6ca7, roofLight: 0x4c8cca, roofShadow: 0x1c4e7e, trim: 0x76a55b, window: 0xb8e5f4, windowShadow: 0x6aa7be });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityTownhouse, "townhouse", 66, { wall: 0xe4eef2, wallShadow: 0xabc0ca, roof: 0x245d91, roofLight: 0x447faf, roofShadow: 0x173f65, trim: 0xe0af3f, window: 0xc0e9f5, windowShadow: 0x73aebe });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityOffice, "office", 104, { wall: 0xddebf0, wallShadow: 0xa5bbc5, roof: 0x1f5686, roofLight: 0x3c78a5, roofShadow: 0x143a5c, trim: 0x66a05d, window: 0xa9e0f2, windowShadow: 0x5793ab });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityTower, "tower", 154, { wall: 0xedf3f2, wallShadow: 0xb8c7c9, roof: 0x174f82, roofLight: 0x3477ad, roofShadow: 0x0f3559, trim: 0xe0ae3c, window: 0xb9e8f5, windowShadow: 0x689fb2 });
+  bakeCityBuilding(scene, WORLD_TEXTURES.cityUtility, "utility", 70, { wall: 0xd7e0e2, wallShadow: 0x9eabad, roof: 0x4b6575, roofLight: 0x6d8999, roofShadow: 0x304551, trim: 0xd8a43b, window: 0xa9d7e8, windowShadow: 0x608d9e });
 }
 
 function bakeCityBuilding(scene: Phaser.Scene, key: string, kind: "house" | "townhouse" | "office" | "tower" | "utility", body: number, palette: CityPalette): void {

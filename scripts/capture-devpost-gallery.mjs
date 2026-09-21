@@ -59,7 +59,7 @@ async function capture(name, target) {
 
 try {
   await page.goto(baseURL, { waitUntil: "networkidle" });
-  await page.getByText("Systems online").waitFor({ state: "visible" });
+  await page.getByRole("heading", { name: "Jaipur resilience district" }).waitFor({ state: "visible" });
   await capture("01-grounded-hero");
   await capture("02-living-digital-twin", page.locator(".overview-grid"));
 

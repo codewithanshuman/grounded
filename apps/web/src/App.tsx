@@ -44,7 +44,7 @@ const MethodologyPanel = lazy(() => import("./hud/MethodologyPanel").then((modul
 const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading verified workspace…</span></div>;
 
 export default function App() {
-  const { connected, world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite, executionMode } = useVerdant();
+  const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant();
 
   const [locationId, setLocationId] = useState<LocationId>("jaipur");
   const [preset, setPreset] = useState<PresetId>("normal");
@@ -193,15 +193,11 @@ export default function App() {
             ><span aria-hidden="true">{index}</span><strong>{label}</strong></button>
           ))}
         </nav>
-        <div className="lab-status">
-          <span className={connected ? "status-dot connected" : "status-dot"} />
-          <div><small>{executionMode.toUpperCase()}</small><strong>{connected ? "Systems online" : "Reconnecting"}</strong></div>
-        </div>
       </header>
 
       <main className="lab-layout">
         <aside className="model-rail">
-          <div className="rail-topline"><span>CONFIGURATION DECK</span><b><i /> LIVE MODEL</b></div>
+          <div className="rail-topline"><span>CONFIGURATION DECK</span><b>JAIPUR · SYSTEM 01</b></div>
           <div className="rail-heading"><span>01</span><div><small>SYSTEM BLUEPRINT</small><h2>Build the microgrid</h2></div></div>
           <p className="rail-intro">Describe the energy system the community depends on. Every value directly changes the simulation.</p>
           <div className="rail-summary" aria-label="Microgrid configuration summary">
@@ -251,11 +247,11 @@ export default function App() {
             <>
             <div className="overview-grid">
               <section className="world-card">
-                <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>Resilience forest</h3></div><span className="verified-pill">Persistent evidence</span></div>
+                <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>Jaipur resilience district</h3></div><span className="verified-pill">Interactive digital twin</span></div>
                 <div className="light-world">
                   <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} /></Suspense>
                   <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
-                  <div className="world-map-id"><span>JAIPUR CITY + CANOPY TWIN</span><b>CONNECTED SYSTEM</b></div>
+                  <div className="world-map-id"><span>JAIPUR RESILIENCE CITY</span><b>OPERATING DISTRICT</b></div>
                   <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="reserve" />Forest reserve</span><span><i className="verified" />Verified growth</span></div>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>

@@ -2,7 +2,7 @@ import type { Building as CityBuilding, WorldSnapshot } from "@sudo-city/protoco
 import type { Building, Tree, WorldState } from "@verdant/protocol";
 import Phaser from "phaser";
 import { WorldScene } from "../reference-city/WorldScene";
-import { GROUND_DEPTH, projection } from "../reference-city/world/core/worldConstants";
+import { FOCUS_ZOOM, GROUND_DEPTH, projection } from "../reference-city/world/core/worldConstants";
 import { TILE_ANCHOR_Y } from "../reference-city/textures/core";
 import { propTextureKey } from "../reference-city/textures/props";
 import { roadTextureKey, TERRAIN_ATLAS_KEY, terrainTextureKey } from "../reference-city/textures/terrain";
@@ -64,6 +64,7 @@ export class GroundedCityScene extends WorldScene {
   private forestReserveObjects: Phaser.GameObjects.GameObject[] = [];
   private latestWorld: WorldState | null = null;
   private activity: ForestActivity = null;
+  private hasHydratedWorld = false;
 
   constructor() {
     super();
@@ -81,13 +82,14 @@ export class GroundedCityScene extends WorldScene {
     this.setRepoIdentity({
       owner: "Grounded",
       name: "Jaipur Resilience",
-      artwork: "/ads/grounded-airport.png",
+      artwork: "/ads/grounded-airport.jpg",
       background: "#163e2c",
     });
     this.drawForestReserve();
-    this.syncEvidenceTrees(world.trees);
+    this.syncEvidenceTrees(world.trees, this.hasHydratedWorld);
     this.syncFacilityLabels();
     this.applyActivity();
+    this.hasHydratedWorld = true;
   }
 
   private drawForestReserve(): void {
@@ -180,7 +182,7 @@ export class GroundedCityScene extends WorldScene {
     if (context) this.inspectHandler?.(context);
   }
 
-  private syncEvidenceTrees(trees: Tree[]): void {
+  private syncEvidenceTrees(trees: Tree[], animateNew: boolean): void {
     const seen = new Set(trees.map((tree) => tree.id));
     for (const [id, sprite] of this.evidenceTrees) {
       if (!seen.has(id)) {
@@ -216,10 +218,81 @@ export class GroundedCityScene extends WorldScene {
       sprite.on("pointerout", () => sprite.setScale(tree.species === "ancient" ? 1.34 : tree.species === "sapling" ? 0.78 : 1.08));
       this.evidenceTrees.set(tree.id, sprite);
 
-      sprite.setAlpha(0).setScale(0.08);
-      this.tweens.add({ targets: sprite, alpha: 1, scaleX: tree.species === "ancient" ? 1.34 : tree.species === "sapling" ? 0.78 : 1.08, scaleY: tree.species === "ancient" ? 1.34 : tree.species === "sapling" ? 0.78 : 1.08, duration: 620, ease: "Back.Out" });
-      const ring = this.add.ellipse(sprite.x, sprite.y - 3, 22, 9).setStrokeStyle(2, 0xb7df72, 0.85).setDepth(sprite.depth - 1);
-      this.tweens.add({ targets: ring, scale: 2.8, alpha: 0, duration: 900, onComplete: () => ring.destroy() });
+      if (animateNew) {
+        this.revealEvidenceTree(tree, sprite);
+      }
+    });
+  }
+
+  /** Turns a completed simulation into an unmistakable, inspectable city event. */
+  private revealEvidenceTree(tree: Tree, sprite: Phaser.GameObjects.Sprite): void {
+    const targetScale = tree.species === "ancient" ? 1.34 : tree.species === "sapling" ? 0.78 : 1.08;
+    sprite.setAlpha(0).setScale(0.08).setAngle(-4);
+    this.cameraController.moveCameraTo(sprite.x, sprite.y - 34, FOCUS_ZOOM);
+
+    const soil = this.add.ellipse(sprite.x, sprite.y - 2, 28, 10, 0x6f4d2d, 0.72).setDepth(sprite.depth - 1);
+    const proofRing = this.add.ellipse(sprite.x, sprite.y - 3, 20, 8)
+      .setStrokeStyle(2, 0xb7df72, 0.9)
+      .setDepth(sprite.depth + 2);
+    const label = this.add.text(sprite.x, sprite.y - 92, "RUN VERIFIED\nEVIDENCE TREE PLANTED", {
+      fontFamily: "IBM Plex Mono, monospace",
+      fontSize: "7px",
+      color: "#f6f7ec",
+      backgroundColor: "#163e2cf2",
+      align: "center",
+      padding: { x: 7, y: 5 },
+    }).setOrigin(0.5, 1).setDepth(sprite.depth + 6).setAlpha(0).setScale(0.92);
+
+    const crewKey = `crew:${workerUrl}`;
+    const crew = this.textures.exists(crewKey)
+      ? this.add.sprite(sprite.x - 27, sprite.y + 2, crewKey).setOrigin(0.5, 1).setDepth(sprite.depth + 4)
+      : undefined;
+    if (crew) crew.setScale(46 / crew.height).setAlpha(0);
+
+    this.tweens.add({
+      targets: sprite,
+      alpha: 1,
+      scaleX: targetScale,
+      scaleY: targetScale,
+      angle: 0,
+      duration: 920,
+      ease: "Back.Out",
+    });
+    this.tweens.add({ targets: proofRing, scale: 3, alpha: 0, duration: 1_050, ease: "Cubic.Out", onComplete: () => proofRing.destroy() });
+    this.tweens.add({ targets: soil, scaleX: 1.3, alpha: 0.38, duration: 900, ease: "Cubic.Out" });
+    this.tweens.add({ targets: label, alpha: 1, scale: 1, y: label.y - 5, duration: 420, delay: 380, ease: "Back.Out" });
+    if (crew) {
+      this.tweens.add({ targets: crew, alpha: 1, x: crew.x + 5, duration: 320, ease: "Cubic.Out" });
+      this.tweens.add({ targets: crew, y: crew.y - 3, duration: 420, yoyo: true, repeat: 2, delay: 320, ease: "Sine.InOut" });
+    }
+
+    for (let index = 0; index < 10; index += 1) {
+      const leaf = this.add.ellipse(sprite.x, sprite.y - 28, 4, 2, 0x78a94f, 0.9)
+        .setDepth(sprite.depth + 3)
+        .setAngle(Phaser.Math.Between(0, 180));
+      this.tweens.add({
+        targets: leaf,
+        x: leaf.x + Phaser.Math.Between(-38, 38),
+        y: leaf.y + Phaser.Math.Between(-35, 12),
+        angle: leaf.angle + Phaser.Math.Between(90, 260),
+        alpha: 0,
+        duration: Phaser.Math.Between(720, 1_150),
+        delay: Phaser.Math.Between(260, 620),
+        onComplete: () => leaf.destroy(),
+      });
+    }
+
+    this.time.delayedCall(2_200, () => {
+      this.tweens.add({
+        targets: [label, soil, ...(crew ? [crew] : [])],
+        alpha: 0,
+        duration: 320,
+        onComplete: () => {
+          label.destroy();
+          soil.destroy();
+          crew?.destroy();
+        },
+      });
     });
   }
 

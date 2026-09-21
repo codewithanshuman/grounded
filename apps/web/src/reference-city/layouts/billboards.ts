@@ -84,14 +84,14 @@ export const SPONSORS: readonly Sponsor[] = [
   {
     id: "grounded-landscape",
     name: "Grounded resilience landscape",
-    artwork: "/ads/grounded-roadside-landscape.png",
+    artwork: "/ads/grounded-roadside-forest.png",
     size: "small",
     background: "#78bde8",
   },
   {
     id: "grounded-square",
     name: "Grounded Resilience Lab",
-    artwork: "/ads/grounded-roadside-square.png",
+    artwork: "/ads/grounded-roadside-celebrate.png",
     size: "square",
     background: "#123d24",
   },

@@ -57,6 +57,7 @@ export default function App() {
   const [optimized, setOptimized] = useState<OptimizeResponse | null>(null);
   const [selectedFailureSeed, setSelectedFailureSeed] = useState<number | null>(null);
   const [isSimulating, setIsSimulating] = useState(false);
+  const [isRevealingEvidence, setIsRevealingEvidence] = useState(false);
   const [isOptimizing, setIsOptimizing] = useState(false);
   const [isSweeping, setIsSweeping] = useState(false);
   const [climateSweep, setClimateSweep] = useState<ClimateSweepResult | null>(null);
@@ -65,7 +66,7 @@ export default function App() {
   const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
-  const isRunning = isSimulating || isOptimizing || isSweeping;
+  const isRunning = isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
   const forestActivity: ForestActivity = isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
 
   const setConfigField = (key: keyof MicrogridConfig) => (val: number) => setConfig((c) => ({ ...c, [key]: val }));
@@ -75,14 +76,24 @@ export default function App() {
     setOperationError(null);
     setOptimized(null);
     try {
-      const { summary } = await simulate(locationId, preset, config, scenarioCount, siteDataProfileId);
+      const [{ summary }] = await Promise.all([
+        simulate(locationId, preset, config, scenarioCount, siteDataProfileId),
+        new Promise<void>((resolve) => window.setTimeout(resolve, 1_400)),
+      ]);
       setBaseline(summary);
       setSelectedFailureSeed(summary.failures[0]?.seed ?? null);
+      setIsSimulating(false);
+      setIsRevealingEvidence(true);
+      // Keep the twin visible long enough to show the verified tree taking
+      // root. The causal report follows automatically after the world event.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 2_350));
+      setIsRevealingEvidence(false);
       setActiveView("risk");
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : "Simulation could not be completed.");
     } finally {
       setIsSimulating(false);
+      setIsRevealingEvidence(false);
     }
   }, [simulate, locationId, preset, config, scenarioCount, siteDataProfileId]);
 
@@ -229,7 +240,7 @@ export default function App() {
               <label><span>Region</span><select value={locationId} onChange={(e) => setLocationId(e.target.value as LocationId)}>{Object.values(LOCATIONS).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
               <label><span>Population</span><select value={scenarioCount} onChange={(e) => setScenarioCount(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} futures</option>)}</select></label>
               <label><span>Site data</span><select value={siteDataProfileId} onChange={(e) => setSiteDataProfileId(e.target.value)}><option value="representative-model">Representative model</option>{siteDataProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}</select></label>
-              <button onClick={runSimulation} disabled={isSimulating} className="run-button"><span>{isSimulating ? "◌" : "→"}</span><div><small>{isSimulating ? "CALCULATING" : "RUN SIMULATION"}</small>{isSimulating ? "Exploring futures…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
+              <button onClick={runSimulation} disabled={isSimulating || isRevealingEvidence} className="run-button"><span>{isRunning ? "◌" : "→"}</span><div><small>{isRevealingEvidence ? "COMMITTING EVIDENCE" : isSimulating ? "CALCULATING" : "RUN SIMULATION"}</small>{isRevealingEvidence ? "Planting verified result…" : isSimulating ? "Exploring futures…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
             </div>
           </div>
           <nav className="proof-path" aria-label="Judge proof path">

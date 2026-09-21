@@ -8,6 +8,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@sudo-city/protocol": "workspace:*",
     "@verdant/protocol": "workspace:*",
     "@verdant/sim": "workspace:*",
     "phaser": "^3.85.0",

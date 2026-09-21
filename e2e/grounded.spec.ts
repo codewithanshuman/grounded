@@ -36,7 +36,7 @@ test("judge path runs measured extreme futures and exposes auditable proof", asy
   await expect(page.getByText("SECOND-ORDER INTERACTION")).toBeVisible();
   await expect(page.getByText("PHYSICS-INFORMED ML AUDIT")).toBeVisible();
   await expect(page.getByText("HOLDOUT AUROC")).toBeVisible();
-  await page.getByRole("button", { name: /06 Method/ }).click();
+  await page.getByRole("button", { name: /Method/ }).click();
   await expect(page.getByText("OUT-OF-SAMPLE VALIDATION")).toBeVisible();
   await expect(page.getByText(/9,210 events/)).toBeVisible();
   await expect(page.getByText(/holdout PASS/)).toBeVisible();
@@ -67,7 +67,7 @@ test("optimizer proves paired holdout safety and compound-stress stability", asy
 
 test("commissioning UI creates and activates a verified local profile", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: /06 Method/ }).click();
+  await page.getByRole("button", { name: /Method/ }).click();
   const uniqueName = `Jaipur E2E Clinic ${Date.now()}`;
   const card = page.locator(".commissioning-card");
   await card.getByLabel("Site name").fill(uniqueName);
@@ -86,7 +86,7 @@ test("mobile evidence laboratory has no horizontal overflow and keeps core contr
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await expect(page.getByRole("button", { name: /RUN SIMULATION/ })).toBeVisible();
-  await page.getByRole("button", { name: /06 Method/ }).click();
+  await page.getByRole("button", { name: /Method/ }).click();
   await expect(page.getByRole("heading", { name: "Turn three exports into a site twin" })).toBeVisible();
   const dimensions = await page.evaluate(() => ({ viewport: document.documentElement.clientWidth, content: document.body.scrollWidth }));
   expect(dimensions.content).toBeLessThanOrEqual(dimensions.viewport);

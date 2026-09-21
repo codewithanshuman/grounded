@@ -10,6 +10,7 @@ playwright-report/
 .codex-artifacts/
 .codex-hosting/
 .chart-data-*/
+reference-*.png
 submission/*.validation.json
 .vercel/
 .env*.local

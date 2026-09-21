@@ -1,11 +1,18 @@
 import { useEffect, useRef } from "react";
 import Phaser from "phaser";
-import { ForestScene, FOREST_READY_EVENT } from "./ForestScene";
-import type { ForestInspection } from "./ForestScene";
-import type { ForestActivity } from "./LiveConstruction";
+import { GroundedCityScene } from "./GroundedCityScene";
 import type { GrowthEvent, WorldState } from "@verdant/protocol";
 
-export type { ForestInspection, ForestActivity };
+export type ForestActivity = "simulation" | "optimization" | "climate" | null;
+
+export type ForestInspection = {
+  kind: "tree" | "building";
+  title: string;
+  status: string;
+  evidence: string;
+  runId: string;
+  occurredAt: number;
+};
 
 export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
   world: WorldState | null;
@@ -15,68 +22,56 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
-  const sceneRef = useRef<ForestScene | null>(null);
-  const processedCount = useRef(0);
-  const worldAppliedRef = useRef(false);
+  const sceneRef = useRef<GroundedCityScene | null>(null);
   const inspectRef = useRef(onInspect);
   const activityRef = useRef(activity);
+  const worldRef = useRef(world);
   inspectRef.current = onInspect;
   activityRef.current = activity;
+  worldRef.current = world;
 
   useEffect(() => {
     if (!containerRef.current) return;
+    const scene = new GroundedCityScene();
+    scene.setInspectHandler((inspection) => inspectRef.current?.(inspection));
+    sceneRef.current = scene;
     const game = new Phaser.Game({
-      type: Phaser.AUTO,
+      type: Phaser.WEBGL,
       parent: containerRef.current,
       width: containerRef.current.clientWidth,
       height: containerRef.current.clientHeight,
-      backgroundColor: "#217fb5",
-      scene: [ForestScene],
+      backgroundColor: "#2e9fe0",
+      scene,
       scale: { mode: Phaser.Scale.RESIZE },
-      render: { antialias: false, pixelArt: true, roundPixels: true },
+      fps: { target: 30 },
+      render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: false, powerPreference: "low-power" },
     });
     gameRef.current = game;
-
-    const onReady = (scene: ForestScene) => {
-      sceneRef.current = scene;
-      scene.setInspectHandler((inspection) => inspectRef.current?.(inspection));
+    game.events.once(Phaser.Core.Events.READY, () => {
+      if (worldRef.current) scene.setGroundedWorld(worldRef.current);
       scene.setActivity(activityRef.current);
-      if (world && !worldAppliedRef.current) {
-        scene.setWorld(world);
-        worldAppliedRef.current = true;
-        processedCount.current = pendingGrowth.length;
-      }
-    };
-    game.events.on(FOREST_READY_EVENT, onReady);
+    });
+
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry || entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
+      game.scale.resize(entry.contentRect.width, entry.contentRect.height);
+      scene.resizeViewport(entry.contentRect.width, entry.contentRect.height);
+    });
+    observer.observe(containerRef.current);
 
     return () => {
-      game.events.off(FOREST_READY_EVENT, onReady);
+      observer.disconnect();
       game.destroy(true);
       gameRef.current = null;
       sceneRef.current = null;
-      worldAppliedRef.current = false;
     };
     // mount once; updates are pushed imperatively below
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // apply the initial/refreshed world snapshot once the scene exists
   useEffect(() => {
-    if (world && sceneRef.current && !worldAppliedRef.current) {
-      sceneRef.current.setWorld(world);
-      worldAppliedRef.current = true;
-      processedCount.current = pendingGrowth.length;
-    }
+    if (world && sceneRef.current?.scene?.isActive()) sceneRef.current.setGroundedWorld(world);
   }, [world, pendingGrowth.length]);
-
-  // animate only newly-arrived growth events
-  useEffect(() => {
-    if (!sceneRef.current || !worldAppliedRef.current) return;
-    for (let i = processedCount.current; i < pendingGrowth.length; i++) {
-      sceneRef.current.addGrowth(pendingGrowth[i]);
-    }
-    processedCount.current = pendingGrowth.length;
-  }, [pendingGrowth]);
 
   useEffect(() => {
     sceneRef.current?.setActivity(activity);

@@ -9,9 +9,12 @@ import fieldHomeUrl from "../../../assets/grounded-field-home.png";
 import monsoonUrl from "../../../assets/grounded-monsoon.png";
 import cloverSkyUrl from "../../../assets/grounded-clover-sky.png";
 import cloverStudioUrl from "../../../assets/grounded-clover-studio.png";
+import { IdentityDialog } from "./auth/IdentityDialog";
+import { completePendingFounding, getActiveIdentity, pendingFoundingFor } from "./auth/localIdentity";
 import "./fonts.css";
 import "./depth-upgrade.css";
 import "./proof-path.css";
+import "./identity.css";
 import type { ForestActivity, ForestInspection } from "./game/GameCanvas";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
@@ -44,7 +47,11 @@ const MethodologyPanel = lazy(() => import("./hud/MethodologyPanel").then((modul
 const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading verified workspace…</span></div>;
 
 export default function App() {
+  const identity = getActiveIdentity();
   const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant();
+  const [identityOpen, setIdentityOpen] = useState(false);
+  const [isFoundingWorld, setIsFoundingWorld] = useState(() => pendingFoundingFor(identity));
+  const [worldSceneReady, setWorldSceneReady] = useState(false);
 
   const [locationId, setLocationId] = useState<LocationId>("jaipur");
   const [preset, setPreset] = useState<PresetId>("normal");
@@ -66,8 +73,17 @@ export default function App() {
   const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
-  const isRunning = isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
-  const forestActivity: ForestActivity = isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
+  const isRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
+  const forestActivity: ForestActivity = isFoundingWorld ? "founding" : isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
+
+  useEffect(() => {
+    if (!isFoundingWorld || !worldSceneReady) return;
+    const timer = window.setTimeout(() => {
+      completePendingFounding(identity);
+      setIsFoundingWorld(false);
+    }, 5_800);
+    return () => window.clearTimeout(timer);
+  }, [identity?.id, isFoundingWorld, worldSceneReady]);
 
   const setConfigField = (key: keyof MicrogridConfig) => (val: number) => setConfig((c) => ({ ...c, [key]: val }));
 
@@ -204,6 +220,10 @@ export default function App() {
             ><span aria-hidden="true">{index}</span><strong>{label}</strong></button>
           ))}
         </nav>
+        <button className="identity-trigger" onClick={() => setIdentityOpen(true)} aria-label={identity ? `Open ${identity.displayName}'s profile` : "Sign in or create a world"}>
+          <i>{identity ? identity.displayName.slice(0, 1).toUpperCase() : "+"}</i>
+          <span><small>{identity ? "ACTIVE WORLD" : "WORLD ACCESS"}</small><strong>{identity?.worldName ?? "Sign in / Sign up"}</strong></span>
+        </button>
       </header>
 
       <main className="lab-layout">
@@ -240,7 +260,7 @@ export default function App() {
               <label><span>Region</span><select value={locationId} onChange={(e) => setLocationId(e.target.value as LocationId)}>{Object.values(LOCATIONS).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
               <label><span>Population</span><select value={scenarioCount} onChange={(e) => setScenarioCount(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} futures</option>)}</select></label>
               <label><span>Site data</span><select value={siteDataProfileId} onChange={(e) => setSiteDataProfileId(e.target.value)}><option value="representative-model">Representative model</option>{siteDataProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}</select></label>
-              <button onClick={runSimulation} disabled={isSimulating || isRevealingEvidence} className="run-button"><span>{isRunning ? "◌" : "→"}</span><div><small>{isRevealingEvidence ? "COMMITTING EVIDENCE" : isSimulating ? "CALCULATING" : "RUN SIMULATION"}</small>{isRevealingEvidence ? "Planting verified result…" : isSimulating ? "Exploring futures…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
+              <button onClick={runSimulation} disabled={isFoundingWorld || isSimulating || isRevealingEvidence} className="run-button"><span>{isRunning ? "◌" : "→"}</span><div><small>{isFoundingWorld ? "FOUNDING WORLD" : isRevealingEvidence ? "COMMITTING EVIDENCE" : isSimulating ? "CALCULATING" : "RUN SIMULATION"}</small>{isFoundingWorld ? "Assembling your field lab…" : isRevealingEvidence ? "Planting verified result…" : isSimulating ? "Exploring futures…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
             </div>
           </div>
           <nav className="proof-path" aria-label="Judge proof path">
@@ -252,17 +272,17 @@ export default function App() {
             <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit<small>Sources + limits</small></span></button>
           </nav>
           {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Check that the simulation server is running, then retry—the previous verified evidence was not overwritten.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
-          {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span></div>}
+          {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span></div>}
 
           {activeView === "overview" && (
             <>
             <div className="overview-grid">
               <section className="world-card">
-                <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>Jaipur resilience district</h3></div><span className="verified-pill">Interactive digital twin</span></div>
+                <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div><span className="verified-pill">Interactive digital twin</span></div>
                 <div className="light-world">
-                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} /></Suspense>
-                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
-                  <div className="world-map-id"><span>JAIPUR RESILIENCE CITY</span><b>OPERATING DISTRICT</b></div>
+                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} onReady={() => setWorldSceneReady(true)} /></Suspense>
+                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{isFoundingWorld ? "WORLD FOUNDING" : forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{isFoundingWorld ? "Construction sequence · profile initialized" : forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
+                  <div className="world-map-id"><span>{(identity?.worldName ?? "Jaipur resilience city").toUpperCase()}</span><b>{identity ? "PRIVATE OPERATING WORLD" : "OPERATING DISTRICT"}</b></div>
                   <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="reserve" />Forest reserve</span><span><i className="verified" />Verified growth</span></div>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
@@ -300,6 +320,7 @@ export default function App() {
 
       <footer className="evidence-bar"><span className="evidence-label"><i /> EVIDENCE LEDGER</span>{world ? <div className="evidence-values"><span><b>{world.totalFuturesSimulated.toLocaleString()}</b> futures simulated</span><span><b>{world.trees.length}</b> trees earned</span><span><b>{world.buildings.length}</b> buildings grown</span></div> : <span>Connecting to the persistent forest…</span>}<span className="evidence-proof">DETERMINISTIC · REPRODUCIBLE · EXPLAINABLE</span></footer>
       {toast && <div className="light-toast"><span>✓</span><div><small>VERIFIED GROWTH</small>{toast}</div></div>}
+      <IdentityDialog open={identityOpen} profile={identity} onClose={() => setIdentityOpen(false)} />
     </div>
   );
 }

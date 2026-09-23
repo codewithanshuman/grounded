@@ -5,7 +5,7 @@ import { WorldScene } from "../reference-city/WorldScene";
 import { FOCUS_ZOOM, GROUND_DEPTH, projection } from "../reference-city/world/core/worldConstants";
 import { TILE_ANCHOR_Y } from "../reference-city/textures/core";
 import { propTextureKey } from "../reference-city/textures/props";
-import { roadTextureKey, TERRAIN_ATLAS_KEY, terrainTextureKey } from "../reference-city/textures/terrain";
+import { TERRAIN_ATLAS_KEY, terrainTextureKey } from "../reference-city/textures/terrain";
 import type { ForestActivity, ForestInspection } from "./GameCanvas";
 import workerUrl from "../../../../assets/world-worker.png";
 import architectUrl from "../../../../assets/world-architect.png";
@@ -15,6 +15,7 @@ const CITY_WIDTH = 36;
 const CITY_HEIGHT = 30;
 
 const FACILITY_PATHS = {
+  founding: "facility/resilience-lab",
   simulation: "facility/critical-care",
   optimization: "facility/storage-control",
   climate: "facility/solar-field",
@@ -53,8 +54,8 @@ const EVIDENCE_PLOTS: ReadonlyArray<readonly [number, number]> = [
 ];
 
 const FOREST_PLOTS: ReadonlyArray<readonly [number, number]> = [
-  [-9, 7], [-7, 7], [-5, 8], [-8, 9], [-6, 9], [-10, 11], [-8, 11], [-6, 11],
-  [-5, 12], [-9, 13], [-7, 13], [-5, 14], [-8, 15], [-6, 15], [-10, 9], [-4, 10],
+  [-13, 7], [-11, 7], [-9, 8], [-12, 9], [-10, 9], [-14, 11], [-12, 11], [-9, 11],
+  [-8, 12], [-13, 13], [-11, 13], [-8, 14], [-12, 15], [-9, 15], [-14, 9], [-7, 13],
 ];
 
 export class GroundedCityScene extends WorldScene {
@@ -96,9 +97,12 @@ export class GroundedCityScene extends WorldScene {
     this.forestReserveObjects.forEach((object) => object.destroy());
     this.forestReserveObjects = [];
 
-    for (let gx = -11; gx <= -3; gx += 1) {
+    // A separate offshore biome: the blue channel between x=-6 and the city
+    // remains real water, so the reserve reads as an island rather than a
+    // green extension accidentally touching the mainland.
+    for (let gx = -15; gx <= -6; gx += 1) {
       for (let gy = 5; gy <= 17; gy += 1) {
-        const dx = (gx + 7) / 4.7;
+        const dx = (gx + 10.5) / 5.15;
         const dy = (gy - 11) / 6.7;
         const distance = dx * dx + dy * dy;
         if (distance > 1.12) continue;
@@ -114,31 +118,11 @@ export class GroundedCityScene extends WorldScene {
       }
     }
 
-    for (let gx = -4; gx <= 1; gx += 1) {
-      const point = projection.project(gx, 10);
-      const deck = this.add.sprite(point.x, point.y + TILE_ANCHOR_Y, TERRAIN_ATLAS_KEY, roadTextureKey(10, "lane"))
-        .setOrigin(0.5, 1)
-        .setDepth(GROUND_DEPTH + 12);
-      this.forestReserveObjects.push(deck);
-    }
-
-    const bridgeStart = projection.project(-4.55, 10);
-    const bridgeEnd = projection.project(1.55, 10);
-    const rails = this.add.graphics().setDepth(GROUND_DEPTH + 14);
-    rails.lineStyle(2, 0x775c3a, 0.95);
-    rails.lineBetween(bridgeStart.x, bridgeStart.y + 8, bridgeEnd.x, bridgeEnd.y + 8);
-    rails.lineBetween(bridgeStart.x, bridgeStart.y + 34, bridgeEnd.x, bridgeEnd.y + 34);
-    for (let step = 0; step <= 6; step += 1) {
-      const t = step / 6;
-      const x = Phaser.Math.Linear(bridgeStart.x, bridgeEnd.x, t);
-      const y = Phaser.Math.Linear(bridgeStart.y, bridgeEnd.y, t);
-      rails.lineBetween(x, y + 7, x, y + 35);
-    }
-    this.forestReserveObjects.push(rails);
+    this.drawForestBridge();
 
     const contextTrees: ReadonlyArray<readonly [number, number, "tree" | "pine" | "bush"]> = [
-      [-10, 7, "pine"], [-8, 6, "tree"], [-5, 7, "pine"], [-10, 15, "tree"], [-7, 16, "pine"], [-4, 14, "tree"],
-      [-11, 11, "bush"], [-6, 6, "bush"], [-4, 16, "bush"], [-9, 16, "tree"], [-5, 16, "pine"],
+      [-14, 7, "pine"], [-11, 6, "tree"], [-8, 7, "pine"], [-14, 15, "tree"], [-11, 16, "pine"], [-7, 14, "tree"],
+      [-15, 11, "bush"], [-9, 6, "bush"], [-7, 16, "bush"], [-13, 16, "tree"], [-8, 16, "pine"], [-12, 5, "tree"],
     ];
     contextTrees.forEach(([gx, gy, kind], index) => {
       const point = projection.project(gx, gy);
@@ -148,6 +132,90 @@ export class GroundedCityScene extends WorldScene {
         .setScale(kind === "bush" ? 0.84 : 1.08 + (index % 3) * 0.08);
       this.forestReserveObjects.push(tree);
     });
+  }
+
+  private drawForestBridge(): void {
+    const bridge = this.add.graphics().setDepth(GROUND_DEPTH + 14);
+    const centers = Array.from({ length: 8 }, (_, index) => projection.project(-6 + index, 10));
+
+    // Reflections, masonry piers and their waterline shadows sit below the
+    // deck. Drawing these explicitly is what makes the span feel supported.
+    for (const index of [2, 4, 6]) {
+      const point = centers[index]!;
+      bridge.fillStyle(0x1b779e, 0.34);
+      bridge.fillEllipse(point.x, point.y + 42, 50, 13);
+      bridge.fillStyle(0x706653, 1);
+      bridge.fillPoints([
+        new Phaser.Geom.Point(point.x - 8, point.y + 4),
+        new Phaser.Geom.Point(point.x + 8, point.y + 11),
+        new Phaser.Geom.Point(point.x + 8, point.y + 43),
+        new Phaser.Geom.Point(point.x - 8, point.y + 36),
+      ], true);
+      bridge.fillStyle(0x9a8f75, 1);
+      bridge.fillRect(point.x - 11, point.y + 6, 22, 7);
+    }
+
+    centers.forEach((point, index) => {
+      const top = new Phaser.Geom.Point(point.x, point.y - 24);
+      const right = new Phaser.Geom.Point(point.x + 48, point.y);
+      const bottom = new Phaser.Geom.Point(point.x, point.y + 24);
+      const left = new Phaser.Geom.Point(point.x - 48, point.y);
+      bridge.fillStyle(index % 2 === 0 ? 0xa87945 : 0xb78954, 1);
+      bridge.fillPoints([top, right, bottom, left], true);
+      bridge.lineStyle(1, 0x6d4b2d, 0.72);
+      bridge.strokePoints([top, right, bottom, left], true);
+      bridge.lineBetween(left.x + 13, left.y + 6, right.x - 13, right.y - 6);
+    });
+
+    const first = centers[0]!;
+    const last = centers[centers.length - 1]!;
+    const sideAStart = { x: first.x - 18, y: first.y + 9 };
+    const sideAEnd = { x: last.x - 18, y: last.y + 9 };
+    const sideBStart = { x: first.x + 18, y: first.y - 9 };
+    const sideBEnd = { x: last.x + 18, y: last.y - 9 };
+    bridge.lineStyle(3, 0x4f3927, 1);
+    bridge.lineBetween(sideAStart.x, sideAStart.y - 18, sideAEnd.x, sideAEnd.y - 18);
+    bridge.lineBetween(sideBStart.x, sideBStart.y - 18, sideBEnd.x, sideBEnd.y - 18);
+    bridge.lineStyle(2, 0x755335, 1);
+    bridge.lineBetween(sideAStart.x, sideAStart.y - 9, sideAEnd.x, sideAEnd.y - 9);
+    bridge.lineBetween(sideBStart.x, sideBStart.y - 9, sideBEnd.x, sideBEnd.y - 9);
+
+    centers.forEach((point, index) => {
+      if (index % 2 !== 0 && index !== centers.length - 1) return;
+      for (const side of [-1, 1]) {
+        const x = point.x + side * 18;
+        const y = point.y - side * 9;
+        bridge.lineStyle(3, 0x4f3927, 1);
+        bridge.lineBetween(x, y + 3, x, y - 22);
+        bridge.fillStyle(0xd7b964, 0.95);
+        bridge.fillCircle(x, y - 24, 3.5);
+        bridge.fillStyle(0xf4df8d, 0.18);
+        bridge.fillCircle(x, y - 24, 9);
+      }
+    });
+    this.forestReserveObjects.push(bridge);
+
+    // Stone abutments visually lock both ends into land instead of letting
+    // the timber deck terminate over open water.
+    for (const gx of [-6.45, 1.45]) {
+      const point = projection.project(gx, 10);
+      const abutment = this.add.graphics().setDepth(GROUND_DEPTH + 13);
+      abutment.fillStyle(0x8d856f, 1);
+      abutment.fillPoints([
+        new Phaser.Geom.Point(point.x - 29, point.y - 2),
+        new Phaser.Geom.Point(point.x, point.y - 16),
+        new Phaser.Geom.Point(point.x + 29, point.y - 2),
+        new Phaser.Geom.Point(point.x, point.y + 13),
+      ], true);
+      abutment.lineStyle(2, 0xb5aa90, 1);
+      abutment.strokePoints([
+        new Phaser.Geom.Point(point.x - 29, point.y - 2),
+        new Phaser.Geom.Point(point.x, point.y - 16),
+        new Phaser.Geom.Point(point.x + 29, point.y - 2),
+        new Phaser.Geom.Point(point.x, point.y + 13),
+      ], true);
+      this.forestReserveObjects.push(abutment);
+    }
   }
 
   setActivity(activity: ForestActivity): void {
@@ -160,7 +228,7 @@ export class GroundedCityScene extends WorldScene {
       this.setCrews([]);
       return;
     }
-    const sprite = this.activity === "optimization" ? architectUrl : this.activity === "climate" ? runnerUrl : workerUrl;
+    const sprite = this.activity === "optimization" || this.activity === "founding" ? architectUrl : this.activity === "climate" ? runnerUrl : workerUrl;
     this.setCrews([{ sessionId: "grounded-live-analysis", sprite, paths: [FACILITY_PATHS[this.activity]] }]);
   }
 

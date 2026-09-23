@@ -3,7 +3,7 @@ import Phaser from "phaser";
 import { GroundedCityScene } from "./GroundedCityScene";
 import type { GrowthEvent, WorldState } from "@verdant/protocol";
 
-export type ForestActivity = "simulation" | "optimization" | "climate" | null;
+export type ForestActivity = "founding" | "simulation" | "optimization" | "climate" | null;
 
 export type ForestInspection = {
   kind: "tree" | "building";
@@ -14,19 +14,22 @@ export type ForestInspection = {
   occurredAt: number;
 };
 
-export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
+export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady }: {
   world: WorldState | null;
   pendingGrowth: GrowthEvent[];
   activity: ForestActivity;
   onInspect?: (inspection: ForestInspection) => void;
+  onReady?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GroundedCityScene | null>(null);
   const inspectRef = useRef(onInspect);
+  const readyRef = useRef(onReady);
   const activityRef = useRef(activity);
   const worldRef = useRef(world);
   inspectRef.current = onInspect;
+  readyRef.current = onReady;
   activityRef.current = activity;
   worldRef.current = world;
 
@@ -50,6 +53,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect }: {
     game.events.once(Phaser.Core.Events.READY, () => {
       if (worldRef.current) scene.setGroundedWorld(worldRef.current);
       scene.setActivity(activityRef.current);
+      readyRef.current?.();
     });
 
     const observer = new ResizeObserver(([entry]) => {

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClimateCalibration, SiteDataProfile, ServerMessage, type ClimateSweepResult, type GrowthEvent, type Intervention, type LocationId, type MicrogridConfig, type PresetId, type RunSummary, type WorldState } from "@verdant/protocol";
 import type { OptimizationSearch, OptimizerValidation } from "@verdant/sim";
+import { activeWorldStorageKey } from "../auth/localIdentity";
 
 declare const __VERDANT_API__: string;
 const API_BASE: string = typeof __VERDANT_API__ !== "undefined" ? __VERDANT_API__ : "";
 const WS_URL = (API_BASE || window.location.origin).replace(/^http/, "ws") + "/ws";
 const STATIC_MODE = typeof __VERDANT_STATIC__ !== "undefined" && __VERDANT_STATIC__;
-const STATIC_WORLD_KEY = "grounded.public.world.v1";
 
 type WorkerResponse = { id: string; ok: boolean; result?: unknown; error?: string };
 
@@ -59,6 +59,7 @@ export function useVerdant() {
 
   useEffect(() => {
     if (STATIC_MODE) {
+      const staticWorldKey = activeWorldStorageKey();
       const worker = new Worker(new URL("./static-engine.worker.ts", import.meta.url), { type: "module" });
       workerRef.current = worker;
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
@@ -70,14 +71,14 @@ export function useVerdant() {
         const payload = message.result as { world?: WorldState; growthEvents?: GrowthEvent[] } | undefined;
         if (payload?.world) {
           setWorld(payload.world);
-          try { localStorage.setItem(STATIC_WORLD_KEY, JSON.stringify(payload.world)); } catch { /* persistence is best effort */ }
+          try { localStorage.setItem(staticWorldKey, JSON.stringify(payload.world)); } catch { /* persistence is best effort */ }
         }
         if (payload?.growthEvents?.length) setGrowthLog((log) => [...log, ...payload.growthEvents!]);
         pending.resolve(message.result);
       };
       worker.onerror = () => setConnected(false);
       let stored: WorldState | undefined;
-      try { stored = JSON.parse(localStorage.getItem(STATIC_WORLD_KEY) ?? "null") ?? undefined; } catch { stored = undefined; }
+      try { stored = JSON.parse(localStorage.getItem(staticWorldKey) ?? "null") ?? undefined; } catch { stored = undefined; }
       setWorld(stored ?? { trees: [], buildings: [], totalRuns: 0, totalFuturesSimulated: 0, bestImprovementPct: 0 });
       setConnected(true);
       const id = crypto.randomUUID();

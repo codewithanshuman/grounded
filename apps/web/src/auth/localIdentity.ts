@@ -113,6 +113,13 @@ export async function createLocalAccount(input: {
   saveAccounts([...stored, account]);
   localStorage.setItem(ACTIVE_PROFILE_KEY, account.id);
   localStorage.setItem(PENDING_FOUNDING_KEY, account.id);
+  localStorage.setItem(`grounded.profile-world.v1.${account.id}`, JSON.stringify({
+    trees: [],
+    buildings: [],
+    totalRuns: 0,
+    totalFuturesSimulated: 0,
+    bestImprovementPct: 0,
+  }));
   return publicProfile(account);
 }
 

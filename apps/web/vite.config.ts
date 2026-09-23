@@ -22,6 +22,8 @@ export default defineConfig({
   define: {
     __VERDANT_API__: JSON.stringify(process.env.VERDANT_API_URL ?? ""),
     __VERDANT_STATIC__: JSON.stringify(staticDemo),
+    __GROUNDED_SUPABASE_URL__: JSON.stringify(process.env.VITE_SUPABASE_URL ?? ""),
+    __GROUNDED_SUPABASE_PUBLISHABLE_KEY__: JSON.stringify(process.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? ""),
   },
   ...(staticDemo ? { build: { outDir: "../../dist", emptyOutDir: true } } : {}),
 });

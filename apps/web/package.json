@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@sudo-city/protocol": "workspace:*",
+    "@supabase/supabase-js": "^2.116.0",
     "@verdant/protocol": "workspace:*",
     "@verdant/sim": "workspace:*",
     "phaser": "^3.85.0",

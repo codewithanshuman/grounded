@@ -9,9 +9,11 @@ export interface IdentityProfile {
   displayName: string;
   worldName: string;
   createdAt: number;
+  authMode: "local" | "github";
+  avatarUrl?: string;
 }
 
-interface StoredAccount extends IdentityProfile {
+interface StoredAccount extends Omit<IdentityProfile, "authMode" | "avatarUrl"> {
   salt: string;
   passwordHash: string;
 }
@@ -58,7 +60,7 @@ async function derivePassword(password: string, salt: Uint8Array): Promise<strin
 
 function publicProfile(account: StoredAccount): IdentityProfile {
   const { id, email, displayName, worldName, createdAt } = account;
-  return { id, email, displayName, worldName, createdAt };
+  return { id, email, displayName, worldName, createdAt, authMode: "local" };
 }
 
 function secureEqual(left: string, right: string): boolean {
@@ -77,9 +79,12 @@ export function getActiveIdentity(): IdentityProfile | null {
   return account ? publicProfile(account) : null;
 }
 
+export function worldStorageKey(profileId?: string | null): string {
+  return profileId ? `grounded.profile-world.v1.${profileId}` : "grounded.public.world.v1";
+}
+
 export function activeWorldStorageKey(): string {
-  const activeId = localStorage.getItem(ACTIVE_PROFILE_KEY);
-  return activeId ? `grounded.profile-world.v1.${activeId}` : "grounded.public.world.v1";
+  return worldStorageKey(localStorage.getItem(ACTIVE_PROFILE_KEY));
 }
 
 export async function createLocalAccount(input: {

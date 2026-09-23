@@ -10,7 +10,8 @@ import monsoonUrl from "../../../assets/grounded-monsoon.png";
 import cloverSkyUrl from "../../../assets/grounded-clover-sky.png";
 import cloverStudioUrl from "../../../assets/grounded-clover-studio.png";
 import { IdentityDialog } from "./auth/IdentityDialog";
-import { completePendingFounding, getActiveIdentity, pendingFoundingFor } from "./auth/localIdentity";
+import { completePendingFounding, pendingFoundingFor } from "./auth/localIdentity";
+import { useIdentitySession } from "./auth/useIdentitySession";
 import "./fonts.css";
 import "./depth-upgrade.css";
 import "./proof-path.css";
@@ -47,10 +48,10 @@ const MethodologyPanel = lazy(() => import("./hud/MethodologyPanel").then((modul
 const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading verified workspace…</span></div>;
 
 export default function App() {
-  const identity = getActiveIdentity();
-  const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant();
+  const { identity, ready: identityReady, error: identityError, cloudConfigured, signIn, signOut } = useIdentitySession();
+  const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant(identity);
   const [identityOpen, setIdentityOpen] = useState(false);
-  const [isFoundingWorld, setIsFoundingWorld] = useState(() => pendingFoundingFor(identity));
+  const [isFoundingWorld, setIsFoundingWorld] = useState(false);
   const [worldSceneReady, setWorldSceneReady] = useState(false);
 
   const [locationId, setLocationId] = useState<LocationId>("jaipur");
@@ -75,6 +76,10 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewId>("overview");
   const isRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
   const forestActivity: ForestActivity = isFoundingWorld ? "founding" : isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
+
+  useEffect(() => {
+    if (pendingFoundingFor(identity)) setIsFoundingWorld(true);
+  }, [identity?.id]);
 
   useEffect(() => {
     if (!isFoundingWorld || !worldSceneReady) return;
@@ -221,8 +226,8 @@ export default function App() {
           ))}
         </nav>
         <button className="identity-trigger" onClick={() => setIdentityOpen(true)} aria-label={identity ? `Open ${identity.displayName}'s profile` : "Sign in or create a world"}>
-          <i>{identity ? identity.displayName.slice(0, 1).toUpperCase() : "+"}</i>
-          <span><small>{identity ? "ACTIVE WORLD" : "WORLD ACCESS"}</small><strong>{identity?.worldName ?? "Sign in / Sign up"}</strong></span>
+          <i>{identity?.avatarUrl ? <img src={identity.avatarUrl} alt="" referrerPolicy="no-referrer" /> : identity ? identity.displayName.slice(0, 1).toUpperCase() : "+"}</i>
+          <span><small>{identity ? identity.authMode === "github" ? "GITHUB WORLD" : "ACTIVE WORLD" : cloudConfigured ? "SECURE WORLD ACCESS" : "WORLD ACCESS"}</small><strong>{identity?.worldName ?? (identityReady ? "Sign in / Sign up" : "Checking session…")}</strong></span>
         </button>
       </header>
 
@@ -320,7 +325,7 @@ export default function App() {
 
       <footer className="evidence-bar"><span className="evidence-label"><i /> EVIDENCE LEDGER</span>{world ? <div className="evidence-values"><span><b>{world.totalFuturesSimulated.toLocaleString()}</b> futures simulated</span><span><b>{world.trees.length}</b> trees earned</span><span><b>{world.buildings.length}</b> buildings grown</span></div> : <span>Connecting to the persistent forest…</span>}<span className="evidence-proof">DETERMINISTIC · REPRODUCIBLE · EXPLAINABLE</span></footer>
       {toast && <div className="light-toast"><span>✓</span><div><small>VERIFIED GROWTH</small>{toast}</div></div>}
-      <IdentityDialog open={identityOpen} profile={identity} onClose={() => setIdentityOpen(false)} />
+      <IdentityDialog open={identityOpen} profile={identity} cloudConfigured={cloudConfigured} authReady={identityReady} authError={identityError} onGitHubSignIn={signIn} onSignOut={signOut} onClose={() => setIdentityOpen(false)} />
     </div>
   );
 }

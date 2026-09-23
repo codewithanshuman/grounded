@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClimateCalibration, SiteDataProfile, ServerMessage, type ClimateSweepResult, type GrowthEvent, type Intervention, type LocationId, type MicrogridConfig, type PresetId, type RunSummary, type WorldState } from "@verdant/protocol";
 import type { OptimizationSearch, OptimizerValidation } from "@verdant/sim";
-import { activeWorldStorageKey } from "../auth/localIdentity";
+import { persistCloudWorld } from "../auth/cloudIdentity";
+import { worldStorageKey, type IdentityProfile } from "../auth/localIdentity";
 
 declare const __VERDANT_API__: string;
 const API_BASE: string = typeof __VERDANT_API__ !== "undefined" ? __VERDANT_API__ : "";
@@ -39,7 +40,7 @@ export interface CommissionSiteInput {
   outageCsv: string;
 }
 
-export function useVerdant() {
+export function useVerdant(identity?: IdentityProfile | null) {
   const [connected, setConnected] = useState(false);
   const [world, setWorld] = useState<WorldState | null>(null);
   const [growthLog, setGrowthLog] = useState<GrowthEvent[]>([]);
@@ -59,7 +60,7 @@ export function useVerdant() {
 
   useEffect(() => {
     if (STATIC_MODE) {
-      const staticWorldKey = activeWorldStorageKey();
+      const staticWorldKey = worldStorageKey(identity?.id);
       const worker = new Worker(new URL("./static-engine.worker.ts", import.meta.url), { type: "module" });
       workerRef.current = worker;
       worker.onmessage = (event: MessageEvent<WorkerResponse>) => {
@@ -72,6 +73,9 @@ export function useVerdant() {
         if (payload?.world) {
           setWorld(payload.world);
           try { localStorage.setItem(staticWorldKey, JSON.stringify(payload.world)); } catch { /* persistence is best effort */ }
+          if (identity?.authMode === "github") {
+            void persistCloudWorld(identity, payload.world).catch((reason) => console.error("Cloud world sync failed", reason));
+          }
         }
         if (payload?.growthEvents?.length) setGrowthLog((log) => [...log, ...payload.growthEvents!]);
         pending.resolve(message.result);
@@ -119,7 +123,7 @@ export function useVerdant() {
       clearTimeout(retryTimer);
       wsRef.current?.close();
     };
-  }, []);
+  }, [identity?.authMode, identity?.id, identity?.worldName]);
 
   const simulate = useCallback(
     async (location: LocationId, preset: PresetId, config: MicrogridConfig, scenarioCount: number, siteDataProfileId: string) => {

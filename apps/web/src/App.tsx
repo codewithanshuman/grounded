@@ -76,6 +76,7 @@ export default function App() {
   const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
+  const [runElapsed, setRunElapsed] = useState(0);
 
   useEffect(() => {
     const syncPath = () => setPublicLabOpen(window.location.pathname === "/lab");
@@ -89,6 +90,16 @@ export default function App() {
   }, []);
   const isRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
   const forestActivity: ForestActivity = isFoundingWorld ? "founding" : isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
+
+  useEffect(() => {
+    if (!isRunning) {
+      setRunElapsed(0);
+      return;
+    }
+    const startedAt = performance.now();
+    const timer = window.setInterval(() => setRunElapsed((performance.now() - startedAt) / 1000), 100);
+    return () => window.clearInterval(timer);
+  }, [isRunning]);
 
   useEffect(() => {
     if (pendingFoundingFor(identity)) setIsFoundingWorld(true);
@@ -303,7 +314,7 @@ export default function App() {
             <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit</span></button>
           </nav>
           {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Check that the simulation server is running, then retry—the previous verified evidence was not overwritten.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
-          {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span></div>}
+          {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span><em>{runElapsed.toFixed(1)}s</em></div>}
 
           {activeView === "overview" && (
             <>

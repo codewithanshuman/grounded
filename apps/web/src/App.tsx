@@ -5,17 +5,15 @@ import { useVerdant, type CommissionSiteInput, type OptimizeResponse } from "./w
 import { TwinPanel, StressPanel } from "./hud/ControlPanels";
 import logoUrl from "../../../assets/logo.png";
 import canopyUrl from "../../../assets/forest-canopy-ui.webp";
-import fieldHomeUrl from "../../../assets/grounded-field-home.png";
-import monsoonUrl from "../../../assets/grounded-monsoon.png";
-import cloverSkyUrl from "../../../assets/grounded-clover-sky.png";
-import cloverStudioUrl from "../../../assets/grounded-clover-studio.png";
 import { IdentityDialog } from "./auth/IdentityDialog";
 import { completePendingFounding, pendingFoundingFor } from "./auth/localIdentity";
 import { useIdentitySession } from "./auth/useIdentitySession";
+import { LandingPage } from "./landing/LandingPage";
 import "./fonts.css";
 import "./depth-upgrade.css";
 import "./proof-path.css";
 import "./identity.css";
+import "./dashboard-shell.css";
 import type { ForestActivity, ForestInspection } from "./game/GameCanvas";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
@@ -27,15 +25,6 @@ const WORKSPACE_META: Record<ViewId, { description: string }> = {
   optimizer: { description: "Search for the smallest intervention that survives holdouts." },
   compare: { description: "Replay identical futures to isolate intervention impact." },
   method: { description: "Inspect sources, assumptions, validation and model limits." },
-};
-
-const WORKSPACE_ART: Record<ViewId, { url: string; position: string }> = {
-  overview: { url: fieldHomeUrl, position: "center 70%" },
-  matrix: { url: monsoonUrl, position: "center 66%" },
-  risk: { url: monsoonUrl, position: "center 72%" },
-  optimizer: { url: cloverSkyUrl, position: "center 54%" },
-  compare: { url: cloverSkyUrl, position: "center 59%" },
-  method: { url: cloverStudioUrl, position: "center 52%" },
 };
 
 const GameCanvas = lazy(() => import("./game/GameCanvas").then((module) => ({ default: module.GameCanvas })));
@@ -51,6 +40,7 @@ export default function App() {
   const { identity, ready: identityReady, error: identityError, cloudConfigured, signIn, signOut } = useIdentitySession();
   const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant(identity);
   const [identityOpen, setIdentityOpen] = useState(false);
+  const [publicLabOpen, setPublicLabOpen] = useState(() => window.location.pathname === "/lab");
   const [isFoundingWorld, setIsFoundingWorld] = useState(false);
   const [worldSceneReady, setWorldSceneReady] = useState(false);
 
@@ -74,6 +64,17 @@ export default function App() {
   const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
+
+  useEffect(() => {
+    const syncPath = () => setPublicLabOpen(window.location.pathname === "/lab");
+    window.addEventListener("popstate", syncPath);
+    return () => window.removeEventListener("popstate", syncPath);
+  }, []);
+
+  const enterPublicLab = useCallback(() => {
+    if (window.location.pathname !== "/lab") window.history.pushState({}, "", "/lab");
+    setPublicLabOpen(true);
+  }, []);
   const isRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
   const forestActivity: ForestActivity = isFoundingWorld ? "founding" : isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
 
@@ -204,14 +205,21 @@ export default function App() {
     { id: "compare", label: "Proof", index: "05" },
     { id: "method", label: "Method", index: "06" },
   ];
-  const activeArtwork = WORKSPACE_ART[activeView];
+
+  if (cloudConfigured && !identityReady) {
+    return <div className="entry-loading"><div><img src={logoUrl} alt="Grounded" /><i /><span>Restoring secure workspace</span></div></div>;
+  }
+
+  if (!identity && !publicLabOpen) {
+    return <LandingPage cloudConfigured={cloudConfigured} authReady={identityReady} authError={identityError} onEnterLab={enterPublicLab} onGitHubSignIn={signIn} />;
+  }
 
   return (
     <div className={`lab-shell view-${activeView} ${isRunning ? "is-processing" : ""}`}>
       <header className="lab-header">
         <div className="lab-brand">
           <span className="brand-mark"><img src={logoUrl} alt="Grounded" /></span>
-          <div><small>FIELD INTELLIGENCE</small><strong>Grounded</strong><span>Climate resilience laboratory</span></div>
+          <div><strong>Grounded</strong><span>Jaipur resilience lab</span></div>
         </div>
         <nav className="lab-nav" aria-label="Analysis workspaces">
           {workspaces.map(({ id, label, index }) => (
@@ -246,34 +254,27 @@ export default function App() {
 
       <main className="lab-layout">
         <aside className="model-rail">
-          <div className="rail-topline"><span>CONFIGURATION DECK</span><b>JAIPUR · SYSTEM 01</b></div>
-          <div className="rail-heading"><span>01</span><div><small>SYSTEM BLUEPRINT</small><h2>Build the microgrid</h2></div></div>
-          <p className="rail-intro">Describe the energy system the community depends on. Every value directly changes the simulation.</p>
+          <div className="rail-clean-heading"><small>MICROGRID INPUTS</small><h2>System configuration</h2><p>Every value directly changes the simulation.</p></div>
           <div className="rail-summary" aria-label="Microgrid configuration summary">
             <span><small>PV ARRAY</small><strong>{config.solarCapacityKW.toLocaleString()}</strong><em>kW</em></span>
             <span><small>STORAGE</small><strong>{config.batteryCapacityKWh.toLocaleString()}</strong><em>kWh</em></span>
             <span><small>CRITICAL</small><strong>{config.hospitalKW.toLocaleString()}</strong><em>kW</em></span>
           </div>
           <div className="panel-surface twin-controls"><TwinPanel config={config} setConfigField={setConfigField} locationId={locationId} /></div>
-          <div className="rail-note"><span>i</span><p><strong>Critical load comes first.</strong> The hospital always claims available solar, grid power and battery reserve before flexible demand.</p></div>
         </aside>
 
         <section className="lab-content">
-          <div className="field-banner">
-            <div className="hero-artwork" aria-hidden="true" style={{ backgroundImage: `url(${activeArtwork.url})`, backgroundPosition: activeArtwork.position }}>
-              <div className="hero-artwork-caption"><span>ILLUSTRATIVE FIELD ARTWORK</span><b>{workspaces.find((item) => item.id === activeView)?.index} / 06</b></div>
+          <section className="workspace-overview">
+            <div className="workspace-overview-title"><span>{workspaces.find((item) => item.id === activeView)?.index}</span><div><h1>{workspaces.find((item) => item.id === activeView)?.label}</h1><p>{WORKSPACE_META[activeView].description}</p></div></div>
+            <div className="workspace-overview-context">
+              <span><small>ENVIRONMENT</small><strong>{environmentLabel}</strong></span>
+              <span><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span>
+              <span><small>MODEL HORIZON</small><strong>72 hours · Δ15m</strong></span>
             </div>
-            <div className="hero-grid" aria-hidden="true" />
-            <div className="field-banner-copy">
-              <div className="hero-kicker"><i /> GROUNDED FIELD LAB <span>/</span> {environmentLabel.toUpperCase()}</div>
-              <h1><span>Test tomorrow</span><br />before it arrives.</h1>
-              <p>Explore thousands of climate futures, expose the precise point of failure, and prove which intervention survives.</p>
-              <div className="hero-trust"><span>Deterministic</span><span>Auditable</span><span>Site-aware</span></div>
-            </div>
-          </div>
+          </section>
 
           <div className="workspace-toolbar">
-            <div className="workspace-title"><span>{workspaces.find((item) => item.id === activeView)?.index}</span><div><small>ACTIVE DECISION WORKSPACE</small><h2>{workspaces.find((item) => item.id === activeView)?.label}</h2><p>{WORKSPACE_META[activeView].description}</p></div></div>
+            <div className="toolbar-label"><small>RUN CONFIGURATION</small><strong>{PRESETS[preset].label} · {scenarioCount.toLocaleString()} futures</strong></div>
             <div className="run-controls">
               <label><span>Region</span><select value={locationId} onChange={(e) => setLocationId(e.target.value as LocationId)}>{Object.values(LOCATIONS).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
               <label><span>Population</span><select value={scenarioCount} onChange={(e) => setScenarioCount(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} futures</option>)}</select></label>
@@ -282,12 +283,12 @@ export default function App() {
             </div>
           </div>
           <nav className="proof-path" aria-label="Judge proof path">
-            <span><small>GUIDED PROOF PATH</small><strong>From stress to verified decision</strong></span>
-            <button onClick={() => setActiveView("overview")} className={baseline ? "done" : activeView === "overview" ? "active" : ""}><b>1</b><span>Stress<small>Choose the hazard</small></span></button>
-            <button onClick={() => setActiveView("risk")} disabled={!baseline} className={baseline ? "done" : ""}><b>2</b><span>Diagnose<small>Explain the failure</small></span></button>
-            <button onClick={() => setActiveView("optimizer")} disabled={!baseline} className={optimized ? "done" : baseline && activeView === "optimizer" ? "active" : ""}><b>3</b><span>Optimize<small>Search + holdouts</small></span></button>
-            <button onClick={() => setActiveView("compare")} disabled={!optimized} className={optimized ? "done" : ""}><b>4</b><span>Prove<small>Replay same seed</small></span></button>
-            <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit<small>Sources + limits</small></span></button>
+            <span><strong>Analysis path</strong></span>
+            <button onClick={() => setActiveView("overview")} className={baseline ? "done" : activeView === "overview" ? "active" : ""}><b>1</b><span>Stress</span></button>
+            <button onClick={() => setActiveView("risk")} disabled={!baseline} className={baseline ? "done" : ""}><b>2</b><span>Diagnose</span></button>
+            <button onClick={() => setActiveView("optimizer")} disabled={!baseline} className={optimized ? "done" : baseline && activeView === "optimizer" ? "active" : ""}><b>3</b><span>Optimize</span></button>
+            <button onClick={() => setActiveView("compare")} disabled={!optimized} className={optimized ? "done" : ""}><b>4</b><span>Prove</span></button>
+            <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit</span></button>
           </nav>
           {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Check that the simulation server is running, then retry—the previous verified evidence was not overwritten.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
           {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span></div>}
@@ -336,7 +337,7 @@ export default function App() {
         </section>
       </main>
 
-      <footer className="evidence-bar"><span className="evidence-label"><i /> EVIDENCE LEDGER</span>{world ? <div className="evidence-values"><span><b>{world.totalFuturesSimulated.toLocaleString()}</b> futures simulated</span><span><b>{world.trees.length}</b> trees earned</span><span><b>{world.buildings.length}</b> buildings grown</span></div> : <span>Connecting to the persistent forest…</span>}<span className="evidence-proof">DETERMINISTIC · REPRODUCIBLE · EXPLAINABLE</span></footer>
+      <footer className="evidence-bar"><span className="evidence-label"><i /> EVIDENCE LEDGER</span>{world ? <div className="evidence-values"><span><b>{world.totalFuturesSimulated.toLocaleString()}</b> futures simulated</span><span><b>{world.trees.length}</b> trees earned</span><span><b>{world.buildings.length}</b> buildings grown</span></div> : <span>Connecting to the persistent forest…</span>}</footer>
       {toast && <div className="light-toast"><span>✓</span><div><small>VERIFIED GROWTH</small>{toast}</div></div>}
       <IdentityDialog open={identityOpen} profile={identity} cloudConfigured={cloudConfigured} authReady={identityReady} authError={identityError} onGitHubSignIn={signIn} onSignOut={signOut} onClose={() => setIdentityOpen(false)} />
     </div>

@@ -1018,19 +1018,19 @@
 
 .lab-shell .identity-trigger,
 .lab-shell .identity-trigger.cloud-ready {
-  border: 1px solid #171a17; color: #fff; background: #fff;
-  box-shadow: 0 4px 13px rgba(27,34,28,.1);
+  padding: 0; overflow: hidden; border: 1px solid #111; color: #fff; background: #171917;
+  box-shadow: 0 4px 13px rgba(27,34,28,.12);
 }
 .lab-shell .identity-trigger:hover,
 .lab-shell .identity-trigger.cloud-ready:hover {
-  border-color: #111; color: #fff; background: #fff;
+  border-color: #111; color: #fff; background: #171917;
   box-shadow: 0 0 0 4px rgba(26,32,27,.07), 0 8px 20px rgba(27,34,28,.14);
 }
 .lab-shell .identity-trigger > i,
 .lab-shell .identity-trigger.cloud-ready > i {
-  color: #fff; background: #171917; box-shadow: none;
+  width: 100%; height: 100%; flex: 0 0 100%; border-radius: 50%; color: #fff; background: #171917; box-shadow: none;
 }
-.lab-shell .identity-trigger > i img { filter: none; }
+.lab-shell .identity-trigger > i img { width: 100%; height: 100%; border-radius: 50%; filter: none; object-fit: cover; }
 
 .landing-page .landing-brand > span {
   width: 48px; height: 43px; border: 0; border-radius: 0; background: transparent; box-shadow: none;

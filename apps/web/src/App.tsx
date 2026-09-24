@@ -225,9 +225,22 @@ export default function App() {
             ><span aria-hidden="true">{index}</span><strong>{label}</strong></button>
           ))}
         </nav>
-        <button className="identity-trigger" onClick={() => setIdentityOpen(true)} aria-label={identity ? `Open ${identity.displayName}'s profile` : "Sign in or create a world"}>
-          <i>{identity?.avatarUrl ? <img src={identity.avatarUrl} alt="" referrerPolicy="no-referrer" /> : identity ? identity.displayName.slice(0, 1).toUpperCase() : "+"}</i>
-          <span><small>{identity ? identity.authMode === "github" ? "GITHUB WORLD" : "ACTIVE WORLD" : cloudConfigured ? "SECURE WORLD ACCESS" : "WORLD ACCESS"}</small><strong>{identity?.worldName ?? (identityReady ? "Sign in / Sign up" : "Checking session…")}</strong></span>
+        <button
+          className={`identity-trigger ${cloudConfigured && !identity ? "cloud-ready" : ""}`}
+          onClick={() => setIdentityOpen(true)}
+          aria-label={identity ? `Open ${identity.displayName}'s profile` : cloudConfigured ? "Continue with GitHub" : "Sign in or create a world"}
+        >
+          <i>{identity?.avatarUrl
+            ? <img src={identity.avatarUrl} alt="" referrerPolicy="no-referrer" />
+            : identity
+              ? identity.displayName.slice(0, 1).toUpperCase()
+              : cloudConfigured
+                ? <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.41-1.26.74-1.55-2.57-.29-5.27-1.29-5.27-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18A10.98 10.98 0 0 1 12 6.1c.98 0 1.95.13 2.86.39 2.2-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.71 5.39-5.29 5.68.42.36.78 1.06.78 2.14v3.28c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z" /></svg>
+                : "+"}</i>
+          <span>
+            <small>{identity ? identity.authMode === "github" ? "GITHUB WORLD" : "ACTIVE WORLD" : cloudConfigured ? "SECURE CLOUD ACCESS" : "WORLD ACCESS"}</small>
+            <strong>{identity?.worldName ?? (identityReady ? cloudConfigured ? "Continue with GitHub" : "Sign in / Sign up" : "Checking session…")}</strong>
+          </span>
         </button>
       </header>
 

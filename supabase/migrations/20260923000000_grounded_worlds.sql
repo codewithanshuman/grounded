@@ -8,6 +8,12 @@ create table if not exists public.grounded_worlds (
 
 alter table public.grounded_worlds enable row level security;
 
+-- The Supabase project keeps "Automatically expose new tables" disabled.
+-- Grant only the operations used by the authenticated browser client; RLS
+-- below still restricts every row to its owning auth user.
+revoke all on table public.grounded_worlds from anon;
+grant select, insert, update on table public.grounded_worlds to authenticated;
+
 drop policy if exists "Owners can read their Grounded world" on public.grounded_worlds;
 create policy "Owners can read their Grounded world"
   on public.grounded_worlds for select

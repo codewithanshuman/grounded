@@ -4,11 +4,16 @@ The application already contains the GitHub OAuth client, authenticated world bo
 
 ## 1. Create the Supabase project
 
-Create a project at Supabase, open the SQL editor, and run:
+Create a project at Supabase with the Data API and automatic RLS enabled, but
+leave **Automatically expose new tables** disabled. Open the SQL editor and
+run:
 
 `supabase/migrations/20260923000000_grounded_worlds.sql`
 
-This creates one private world per authenticated user. Row-level security restricts every read, insert, and update to `auth.uid() = user_id`.
+This creates one private world per authenticated user, explicitly grants only
+the required operations to authenticated clients, and grants nothing to the
+anonymous role. Row-level security restricts every read, insert, and update to
+`auth.uid() = user_id`.
 
 ## 2. Register the GitHub OAuth application
 

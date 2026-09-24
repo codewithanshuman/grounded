@@ -16,8 +16,13 @@
 }
 .identity-trigger > i { width: 31px; height: 31px; display: grid; place-items: center; overflow: hidden; border-radius: 10px; color: #f7faef; background: linear-gradient(145deg, #2d6840, #17452b); font: 700 10px/1 "IBM Plex Mono", monospace; font-style: normal; }
 .identity-trigger > i img, .identity-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.identity-trigger > i svg { width: 17px; height: 17px; }
 .identity-trigger small { display: block; color: #839080; font: 600 6px/1 "IBM Plex Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
 .identity-trigger strong { display: block; margin-top: 4px; overflow: hidden; color: #24452e; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.identity-trigger.cloud-ready { min-width: 176px; border-color: #214b30; color: #fff; background: linear-gradient(135deg, #295f3b, #163d27); box-shadow: 0 11px 25px rgba(24, 67, 39, .2); }
+.identity-trigger.cloud-ready > i { color: #fff; background: rgba(255, 255, 255, .12); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .12); }
+.identity-trigger.cloud-ready small { color: #bad2b8; }
+.identity-trigger.cloud-ready strong { color: #fff; }
 
 .identity-backdrop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 24px; background: rgba(10, 35, 22, .66); backdrop-filter: blur(14px); }
 .identity-dialog { position: relative; width: min(880px, 96vw); min-height: 530px; display: grid; grid-template-columns: .92fr 1.08fr; overflow: hidden; border: 1px solid rgba(219, 235, 203, .48); border-radius: 28px; background: #f7f8ef; box-shadow: 0 38px 120px rgba(6, 27, 15, .42); }

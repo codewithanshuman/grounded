@@ -274,6 +274,11 @@ export default function App() {
 
       <main className="lab-layout">
         <aside className="model-rail">
+          <div className="rail-studio">
+            <img src={logoUrl} alt="" aria-hidden="true" />
+            <span><small>GROUNDED MODEL</small><strong>Scenario studio</strong></span>
+            <em><i /> Live</em>
+          </div>
           <div className="rail-clean-heading"><small>MICROGRID INPUTS</small><h2>System configuration</h2><p>Every value directly changes the simulation.</p></div>
           <div className="rail-summary" aria-label="Microgrid configuration summary">
             <span><small>PV ARRAY</small><strong>{config.solarCapacityKW.toLocaleString()}</strong><em>kW</em></span>

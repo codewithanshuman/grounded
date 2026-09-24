@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import type { ClimateCalibration, ClimateSweepResult, LocationId, MicrogridConfig, PresetId, RunSummary, SiteDataProfile } from "@verdant/protocol";
 import { LOCATIONS, PRESETS, DEFAULT_CONFIG } from "@verdant/sim";
 import { useVerdant, type CommissionSiteInput, type OptimizeResponse } from "./ws/client";
@@ -36,17 +36,14 @@ const MethodologyPanel = lazy(() => import("./hud/MethodologyPanel").then((modul
 
 const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading verified workspace…</span></div>;
 
-function WorkspaceGlyph({ id }: { id: ViewId }) {
-  const paths: Record<ViewId, ReactNode> = {
-    overview: <><rect x="4" y="4" width="16" height="16" rx="4" /><path d="M8 15v-3m4 3V9m4 6V7" /></>,
-    matrix: <><rect x="4" y="4" width="6" height="6" rx="1.5" /><rect x="14" y="4" width="6" height="6" rx="1.5" /><rect x="4" y="14" width="6" height="6" rx="1.5" /><rect x="14" y="14" width="6" height="6" rx="1.5" /></>,
-    risk: <><path d="M12 3 21 19H3L12 3Z" /><path d="M12 9v4m0 3h.01" /></>,
-    optimizer: <><path d="M5 7h14M8 12h8m-5 5h2" /><circle cx="5" cy="7" r="1" /><circle cx="16" cy="12" r="1" /><circle cx="11" cy="17" r="1" /></>,
-    compare: <><path d="M8 5H5v14h3M16 5h3v14h-3M9 9h6m-6 6h6" /></>,
-    method: <><path d="M7 3h8l3 3v15H7z" /><path d="M15 3v4h4M10 11h5m-5 4h5" /></>,
-  };
-  return <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{paths[id]}</svg>;
-}
+const NAV_LABELS: Record<ViewId, string> = {
+  overview: "Twin",
+  matrix: "Climate",
+  risk: "Risk",
+  optimizer: "Strategy",
+  compare: "Proof",
+  method: "Method",
+};
 
 export default function App() {
   const { identity, ready: identityReady, error: identityError, cloudConfigured, signIn, signOut } = useIdentitySession();
@@ -253,7 +250,7 @@ export default function App() {
               aria-current={activeView === id ? "page" : undefined}
               aria-label={label}
               className={activeView === id ? "active" : ""}
-            ><span className="nav-glyph"><WorkspaceGlyph id={id} /></span><span className="nav-copy"><small>{index}</small><strong>{label}</strong></span></button>
+            ><span className="nav-copy"><strong>{NAV_LABELS[id]}</strong></span></button>
           ))}
         </nav>
         <button

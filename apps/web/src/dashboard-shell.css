@@ -688,3 +688,119 @@
   .lab-shell .workspace-fallback i,
   .lab-shell .run-button .run-icon i { animation: none; }
 }
+
+/* Floating black navigation capsule ------------------------------------
+   The dashboard header follows the supplied top-attached reference: one
+   compact black bar, simple text navigation and a high-contrast account CTA. */
+.lab-shell .lab-header {
+  position: relative; z-index: 30; top: 0;
+  width: min(1040px, calc(100% - 32px)); min-height: 64px; height: 64px; margin: 0 auto; padding: 0 12px;
+  display: grid; grid-template-columns: 174px minmax(0, 1fr) 154px; grid-template-rows: 64px; gap: 10px; align-items: center;
+  overflow: hidden; color: #fff; border: 0; border-radius: 0 0 22px 22px;
+  background: #050505; box-shadow: 0 13px 34px rgba(4, 10, 6, .2); backdrop-filter: none;
+}
+.lab-shell .lab-header::after { display: none; }
+
+.lab-shell .lab-brand { min-width: 0; gap: 9px; color: #fff; }
+.lab-shell .brand-mark {
+  width: 36px; height: 36px; flex: 0 0 36px; border: 1px solid rgba(255,255,255,.16); border-radius: 10px;
+  background: linear-gradient(180deg, #3f8a55 0%, #1c5734 100%);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.22), 0 5px 12px rgba(0,0,0,.32);
+}
+.lab-shell .lab-brand .brand-mark img { width: 28px; height: 28px; filter: brightness(0) invert(1); }
+.lab-shell .lab-brand > div { min-width: 0; display: block; }
+.lab-shell .lab-brand strong {
+  overflow: hidden; display: block; color: #fff; font: 720 14px/1 Manrope, sans-serif;
+  letter-spacing: -.035em; text-overflow: ellipsis; white-space: nowrap;
+}
+.lab-shell .lab-brand > div > span { display: none; }
+
+.lab-shell .lab-nav {
+  width: auto; height: 64px; padding: 0; display: flex; align-items: stretch; justify-content: center; gap: 0;
+  overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none;
+}
+.lab-shell .lab-nav button {
+  position: relative; min-width: 0; width: auto; height: 64px; padding: 0 clamp(10px, 1.1vw, 17px);
+  display: flex; align-items: center; justify-content: center; border: 0; border-radius: 0;
+  color: #777; background: transparent; box-shadow: none;
+}
+.lab-shell .lab-nav .nav-glyph,
+.lab-shell .lab-nav .nav-copy small { display: none; }
+.lab-shell .lab-nav .nav-copy {
+  min-width: 0; width: auto; height: auto; margin: 0; display: block;
+  border: 0; border-radius: 0; color: inherit; background: transparent;
+  font: inherit; letter-spacing: inherit; box-shadow: none;
+}
+.lab-shell .lab-nav .nav-copy strong {
+  color: inherit; font: 610 10px/1 Manrope, sans-serif; letter-spacing: -.01em; white-space: nowrap;
+}
+.lab-shell .lab-nav button::after {
+  content: ""; position: absolute; left: 50%; bottom: 7px; width: 0; height: 2px;
+  border-radius: 999px; background: #9ad16e; transform: translateX(-50%);
+  transition: width .22s ease, opacity .22s ease; opacity: 0;
+}
+.lab-shell .lab-nav button:hover:not(:disabled) { transform: none; color: #d7d7d7; border: 0; background: transparent; }
+.lab-shell .lab-nav button.active {
+  color: #fff; border: 0; background: transparent; box-shadow: none;
+}
+.lab-shell .lab-nav button.active::after { width: 18px; opacity: 1; }
+.lab-shell .lab-nav button:disabled { opacity: .34; }
+
+.lab-shell .identity-trigger,
+.lab-shell .identity-trigger.cloud-ready {
+  width: 100%; min-width: 0; max-width: 154px; min-height: 42px; height: 42px; padding: 4px 12px;
+  display: flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 13px;
+  color: #080808; background: #fff; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08), 0 3px 10px rgba(0,0,0,.2);
+}
+.lab-shell .identity-trigger:hover,
+.lab-shell .identity-trigger.cloud-ready:hover { transform: translateY(-1px); border: 0; color: #000; background: #f3f3f3; }
+.lab-shell .identity-trigger > i,
+.lab-shell .identity-trigger.cloud-ready > i {
+  width: 24px; height: 24px; flex: 0 0 24px; border-radius: 7px; color: #fff; background: #111; box-shadow: none;
+}
+.lab-shell .identity-trigger > i svg,
+.lab-shell .identity-trigger.cloud-ready > i svg { width: 14px; height: 14px; }
+.lab-shell .identity-trigger > span { min-width: 0; }
+.lab-shell .identity-trigger small,
+.lab-shell .identity-trigger.cloud-ready small { display: none; }
+.lab-shell .identity-trigger strong,
+.lab-shell .identity-trigger.cloud-ready strong {
+  max-width: 98px; margin: 0; overflow: hidden; display: block; color: #0a0a0a;
+  font: 700 9px/1 Manrope, sans-serif; text-overflow: ellipsis; white-space: nowrap;
+}
+
+@media (max-width: 1080px) {
+  .lab-shell .lab-header {
+    width: calc(100% - 20px); min-height: 64px; height: 64px; padding: 0 10px;
+    grid-template-columns: 150px minmax(0,1fr) 126px; grid-template-rows: 64px; gap: 6px;
+  }
+  .lab-shell .lab-nav button { padding-inline: 9px; }
+  .lab-shell .identity-trigger,
+  .lab-shell .identity-trigger.cloud-ready { max-width: 126px; padding-inline: 8px; }
+  .lab-shell .identity-trigger strong,
+  .lab-shell .identity-trigger.cloud-ready strong { max-width: 84px; }
+}
+
+@media (max-width: 720px) {
+  .lab-shell .lab-header {
+    width: calc(100% - 12px); min-height: 60px; height: 60px; padding: 0 8px;
+    grid-template-columns: 38px minmax(0,1fr) 38px; grid-template-rows: 60px; gap: 6px; border-radius: 0 0 18px 18px;
+  }
+  .lab-shell .lab-brand { gap: 0; }
+  .lab-shell .brand-mark { width: 34px; height: 34px; flex-basis: 34px; border-radius: 9px; }
+  .lab-shell .lab-brand .brand-mark img { width: 27px; height: 27px; }
+  .lab-shell .lab-brand > div { display: none; }
+  .lab-shell .lab-nav {
+    grid-column: auto; grid-row: auto; width: 100%; height: 60px; justify-content: flex-start;
+    overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+  }
+  .lab-shell .lab-nav::-webkit-scrollbar { display: none; }
+  .lab-shell .lab-nav button { min-width: 58px; height: 60px; padding: 0 8px; flex: 0 0 auto; }
+  .lab-shell .lab-nav .nav-copy strong { font-size: 9px; }
+  .lab-shell .lab-nav button::after { bottom: 6px; }
+  .lab-shell .identity-trigger,
+  .lab-shell .identity-trigger.cloud-ready { width: 38px; max-width: 38px; min-height: 36px; height: 36px; padding: 0; border-radius: 10px; }
+  .lab-shell .identity-trigger > i,
+  .lab-shell .identity-trigger.cloud-ready > i { width: 26px; height: 26px; }
+  .lab-shell .identity-trigger > span { display: none; }
+}

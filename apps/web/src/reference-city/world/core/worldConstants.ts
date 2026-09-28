@@ -37,7 +37,7 @@ export const HIGHLIGHT_DEPTH = -900_000;
 export const TRAFFIC_DEPTH = -800_000;
 export const SKY_DEPTH = 100_000_000;
 
-export const MIN_ZOOM = 0.2;
+export const MIN_ZOOM = 0.04;
 export const MAX_ZOOM = 2;
 export const FOCUS_ZOOM = 1.25;
 export const FOCUS_DURATION_MS = 450;

@@ -291,9 +291,9 @@ export class WorldScene extends Phaser.Scene {
           sessionId: crew.sessionId,
           path,
           x: view.sprite.x,
-          y: view.sprite.y,
+          y: view.sprite.y - (view.sprite.getData("constructionAnchorOffset") ?? 0),
           depth: view.sprite.depth,
-          height: view.sprite.height,
+          height: view.sprite.displayHeight - (view.sprite.getData("constructionAnchorOffset") ?? 0),
           crewTexture: this.crewTextures.get(crew.sessionId),
         });
       }
@@ -332,9 +332,9 @@ export class WorldScene extends Phaser.Scene {
         sessionId,
         path,
         x: view.sprite.x,
-        y: view.sprite.y,
+        y: view.sprite.y - (view.sprite.getData("constructionAnchorOffset") ?? 0),
         depth: view.sprite.depth,
-        height: view.sprite.height,
+        height: view.sprite.displayHeight - (view.sprite.getData("constructionAnchorOffset") ?? 0),
         crewTexture: this.crewTextures.get(sessionId),
       });
       return;

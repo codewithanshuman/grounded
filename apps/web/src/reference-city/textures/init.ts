@@ -4,7 +4,7 @@ import { NAVY_COMMAND_KEY, bakeNavyPier, bakeNavyCommand, bakeNavyHangar, bakeNa
 import { createBaker } from "./core";
 import { bakeHighlight, HIGHLIGHT_KEY, SELECT_KEY, ADDED_MARKER_KEY, bakeRubble, bakeCloud, bakeSmoke, bakeSparkle } from "./effects";
 import { bakeTree, bakePine, bakeBush, bakeRock, bakeFountain, bakeLamp } from "./props";
-import { CAR_KEYS, bakeCar, WOODEN_SHIP_KEYS, bakeWoodenShip } from "./vehicles";
+import { CAR_KEYS, BUS_KEYS, bakeCar, WOODEN_SHIP_KEYS, bakeWoodenShip } from "./vehicles";
 import { bakeIssueShop } from "./buildings";
 import { bakeAirportApron, bakeAirportTaxiway, AIRPORT_TAXIWAY_VERTICAL_KEY, AIRPORT_TAXIWAY_JUNCTION_KEY, bakeAirportRunwayTile, bakeAirportRunwayThreshold } from "./airport/runway";
 import { bakeAirportTerminal, bakeAirportTower } from "./airport/terminal";
@@ -60,6 +60,7 @@ export function bakeTerrainTextures(scene: Phaser.Scene): void {
   bakeSmoke(baker);
   bakeSparkle(baker);
   CAR_KEYS.forEach((key, index) => bakeCar(baker, key, index));
+  BUS_KEYS.forEach((key, index) => bakeCar(baker, key, CAR_KEYS.length + index));
   WOODEN_SHIP_KEYS.forEach((key, index) => bakeWoodenShip(baker, key, index));
   bakeIssueShop(baker);
   bakeAirportApron(baker);

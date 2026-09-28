@@ -368,6 +368,8 @@ export class WorldCameraController {
         deltaY: number,
       ) => {
         if (this.isTravelTransitionActive()) return;
+        // Scrolling a floating district control or dashboard panel is not zoom.
+        if (!isCanvasPointer(pointer)) return;
         const camera = this.scene.cameras.main;
         this.noteCameraInput();
         const before = camera.getWorldPoint(pointer.x, pointer.y);

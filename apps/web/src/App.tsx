@@ -331,14 +331,14 @@ export default function App() {
                     <small>{forestInspection.status}</small>
                     <h4>{forestInspection.title}</h4>
                     <p>{forestInspection.evidence}</p>
-                    <div><span>RUN <code>{forestInspection.runId.slice(0, 12)}</code></span><span>{new Date(forestInspection.occurredAt).toLocaleString()}</span></div>
+                    {forestInspection.runId !== "system-context" && <div><span>RUN <code>{forestInspection.runId.slice(0, 12)}</code></span><span>{new Date(forestInspection.occurredAt).toLocaleString()}</span></div>}
                   </aside>}
                 </div>
                 <div className="world-caption"><p>Drag to explore · scroll to zoom · select an object to inspect proof</p>{world && <div><span><b>{world.trees.length}</b> verified trees</span><span><b>{world.buildings.length}</b> resilience buildings</span><span><b>{world.totalRuns}</b> completed runs</span></div>}</div>
               </section>
               <aside className="hazard-column">
                 <section className="hazard-card"><div className="card-heading"><div><small>02 · CLIMATE PRESSURE</small><h3>Choose a hazard</h3></div></div><div className="panel-surface"><StressPanel preset={preset} setPreset={setPreset} isSweeping={isSweeping} runClimateSweep={runAllHazards} /></div></section>
-                <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><small>EVIDENCE, NOT PROMISES</small><p>Every tree appears only after a completed, reproducible simulation.</p></div></section>
+                <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><small>EVIDENCE, NOT PROMISES</small><p>Evidence trees appear after completed, reproducible simulations. The surrounding forest is illustrative.</p></div></section>
               </aside>
             </div>
             <section className="world-provenance-strip" aria-label="Current model provenance">

@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Phaser from "phaser";
-import { GroundedCityScene } from "./GroundedCityScene";
+import { GroundedCityScene, type CityView } from "./GroundedCityScene";
 import type { GrowthEvent, WorldState } from "@verdant/protocol";
 
 export type ForestActivity = "founding" | "simulation" | "optimization" | "climate" | null;
@@ -22,6 +22,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
   onReady?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const [district, setDistrict] = useState<CityView>("city");
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GroundedCityScene | null>(null);
   const inspectRef = useRef(onInspect);
@@ -81,5 +82,12 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
     sceneRef.current?.setActivity(activity);
   }, [activity]);
 
-  return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
+  return <div style={{ width: "100%", height: "100%", position: "relative" }}>
+    <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+    <nav aria-label="Explore city districts" style={{position:"absolute",left:16,top:80,zIndex:4,display:"flex",flexWrap:"wrap",gap:4,maxWidth:"calc(100% - 32px)",padding:5,borderRadius:14,background:"rgba(255,255,255,.94)",boxShadow:"0 4px 20px #14362720",border:"1px solid #ffffffaa"}}>
+      {([['city','City'],['forest','Forest'],['bridge','Bridge'],['landmarks','Civic quarter'],['energy','Energy'],['world','Whole world']] as const).map(([id,label])=>
+        <button key={id} type="button" aria-pressed={district===id} onClick={()=>{setDistrict(id);sceneRef.current?.showDistrict(id);}}
+          style={{font:"600 13px Manrope, sans-serif",padding:"9px 13px",border:0,borderRadius:9,cursor:"pointer",background:district===id?"#e0edce":"transparent",color:district===id?"#244633":"#50615c"}}>{label}</button>)}
+    </nav>
+  </div>;
 }

@@ -1,19 +1,23 @@
-import type { Building as CityBuilding, WorldSnapshot } from "@sudo-city/protocol";
+import { capitolDistrict, inCapitolDistrict, type Building as CityBuilding, type WorldSnapshot } from "@sudo-city/protocol";
 import type { Building, Tree, WorldState } from "@verdant/protocol";
 import Phaser from "phaser";
 import { WorldScene } from "../reference-city/WorldScene";
-import { FOCUS_ZOOM, GROUND_DEPTH, projection } from "../reference-city/world/core/worldConstants";
+import { FOCUS_ZOOM, MIN_ZOOM, projection } from "../reference-city/world/core/worldConstants";
 import { TILE_ANCHOR_Y } from "../reference-city/textures/core";
 import { propTextureKey } from "../reference-city/textures/props";
-import { TERRAIN_ATLAS_KEY, terrainTextureKey } from "../reference-city/textures/terrain";
+import { prefersReducedMotion } from "../reference-city/systems/ambient";
+import { ARCHITECTURE, bakeArchitecture } from "./landmarks/architecture";
+import { addPylonLine, addWindTurbine, bakeEnergy } from "./landmarks/energy";
+import { addReserve } from "./landmarks/reserve";
+import { CITY_SIZE, FOREST_PLOTS, LANDMARK_SITES, RESERVE, RESERVE_STRUCTURES, insideLandmark } from "./landmarks/worldLayout";
 import type { ForestActivity, ForestInspection } from "./GameCanvas";
 import { bakeTextures, WORLD_TEXTURES } from "./textures";
 import workerUrl from "../../../../assets/world-worker.png";
 import architectUrl from "../../../../assets/world-architect.png";
 import runnerUrl from "../../../../assets/world-runner.png";
 
-const CITY_WIDTH = 36;
-const CITY_HEIGHT = 30;
+const CITY_WIDTH = CITY_SIZE.width;
+const CITY_HEIGHT = CITY_SIZE.height;
 
 const FACILITY_PATHS = {
   founding: "facility/resilience-lab",
@@ -23,18 +27,19 @@ const FACILITY_PATHS = {
 } as const;
 
 const STATIC_BUILDINGS: CityBuilding[] = [
-  cityBuilding("facility/critical-care", "critical-care", "Python", 4200, 7, 13),
+  cityBuilding("facility/critical-care", "critical-care", "Python", 4200, 9, 15),
   cityBuilding("facility/solar-field", "generation", "JavaScript", 2600, 1, 19),
   cityBuilding("facility/storage-control", "storage", "Rust", 3300, 31, 19),
   cityBuilding("facility/grid-intertie", "grid", "TypeScript", 3000, 31, 7),
   cityBuilding("facility/resilience-lab", "operations", "SQL", 3800, 7, 7),
-  cityBuilding("facility/community-hub", "community", "HTML", 1700, 25, 25),
+  cityBuilding("facility/community-hub", "community", "HTML", 1700, 21, 27),
   cityBuilding("facility/water-security", "critical-care", "Python", 2500, 1, 13),
   cityBuilding("facility/emergency-comms", "operations", "TypeScript", 3100, 13, 7),
-  cityBuilding("facility/heat-shelter", "operations", "JavaScript", 2300, 19, 13),
-  cityBuilding("facility/microgrid-command", "operations", "Rust", 3900, 25, 13),
-  cityBuilding("facility/forecast-tower", "storage", "TypeScript", 3600, 25, 19),
-  cityBuilding("facility/recovery-depot", "generation", "SQL", 2100, 13, 25),
+  cityBuilding("facility/heat-shelter", "operations", "JavaScript", 2300, 15, 9),
+  cityBuilding("facility/microgrid-command", "operations", "Rust", 3900, 33, 15),
+  cityBuilding("facility/forecast-tower", "storage", "TypeScript", 3600, 33, 21),
+  cityBuilding("facility/recovery-depot", "generation", "SQL", 2100, 15, 27),
+  ...LANDMARK_SITES.filter(site => site.kind !== "hospital").map(site => cityBuilding(site.path, "community", "HTML", 2000, site.gx, site.gy)),
 ];
 
 const STATIC_INSPECTIONS: Record<string, ForestInspection> = {
@@ -44,11 +49,11 @@ const STATIC_INSPECTIONS: Record<string, ForestInspection> = {
   "facility/grid-intertie": contextInspection("Grid intertie", "Import limits and restoration uncertainty enter through this asset."),
   "facility/resilience-lab": contextInspection("Resilience operations", "Scenario, optimization and validation runs are coordinated here."),
   "facility/community-hub": contextInspection("Community resilience hub", "The model translates infrastructure performance into continuity of service."),
-  "facility/water-security": contextInspection("Water security centre", "Models water continuity during heat, outage and restoration scenarios."),
+  "facility/water-security": contextInspection("Water security centre", "Illustrative water infrastructure; water-network continuity is not independently simulated."),
   "facility/emergency-comms": contextInspection("Emergency communications", "Keeps incident coordination visible across the resilience district."),
-  "facility/heat-shelter": contextInspection("Heat refuge", "Tests continuity for a community cooling and shelter facility."),
+  "facility/heat-shelter": contextInspection("Heat refuge", "Illustrative cooling shelter representing the community served by resilient energy infrastructure."),
   "facility/microgrid-command": contextInspection("Microgrid command", "Coordinates solar, storage and critical-load dispatch policies."),
-  "facility/forecast-tower": contextInspection("Forecast tower", "Monitors the climate and grid signals used by the scenario engine."),
+  "facility/forecast-tower": contextInspection("Forecast tower", "Illustrative weather observatory; climate inputs are supplied through the scenario data pipeline."),
   "facility/recovery-depot": contextInspection("Recovery depot", "Represents crews, spares and restoration logistics after disruption."),
 };
 
@@ -59,17 +64,26 @@ const FACILITY_LABELS: Record<string, string> = {
   "facility/grid-intertie": "GRID INTERTIE",
 };
 
-const EVIDENCE_PLOTS: ReadonlyArray<readonly [number, number]> = [
+const LEGACY_EVIDENCE_PLOTS: ReadonlyArray<readonly [number, number]> = [
   [1, 1], [5, 1], [7, 1], [11, 1], [13, 1], [17, 1], [19, 1], [23, 1], [25, 1], [29, 1], [31, 1], [35, 1],
   [1, 5], [5, 5], [7, 5], [11, 5], [13, 5], [17, 5], [19, 5], [23, 5], [25, 5], [29, 5], [31, 5], [35, 5],
   [1, 23], [5, 23], [7, 23], [11, 23], [13, 23], [17, 23], [19, 23], [23, 23], [25, 23], [29, 23], [31, 23], [35, 23],
   [1, 29], [5, 29], [7, 29], [11, 29], [13, 29], [17, 29], [19, 29], [23, 29], [25, 29], [29, 29], [31, 29], [35, 29],
 ];
 
-const FOREST_PLOTS: ReadonlyArray<readonly [number, number]> = [
-  [-14, 7], [-12, 7], [-9, 7], [-13, 9], [-10, 9], [-14, 11], [-12, 11], [-9, 11],
-  [-8, 12], [-14, 14], [-12, 14], [-9, 14], [-13, 16], [-10, 16], [-15, 10], [-8, 15],
-];
+const mall = capitolDistrict(CITY_SIZE);
+const occupied = (x: number, y: number) => insideLandmark(x,y) || inCapitolDistrict(mall,x,y)
+  || STATIC_BUILDINGS.some(b => Math.abs(b.plot.x-x) < 1.3 && Math.abs(b.plot.y-y) < 1.3);
+const EVIDENCE_PLOTS = [...LEGACY_EVIDENCE_PLOTS, ...Array.from({length: 16}, (_,i) => [1+Math.floor(i/2)*6, i%2 ? 35 : 31] as const)]
+  .filter(([x,y]) => !occupied(x,y));
+const NEIGHBOURHOODS: CityBuilding[] = [];
+for (const y of [1,5,7,11,25,29,31]) for (const x of [1,5,13,17,19,23,25,29,31,35,43,47]) {
+  if (occupied(x,y) || EVIDENCE_PLOTS.some(([a,b])=>a===x&&b===y) || (x>=43&&y<19)) continue;
+  const index=NEIGHBOURHOODS.length;
+  NEIGHBOURHOODS.push(cityBuilding(`neighbourhood/${x}/${y}`, "community", ["HTML","CSS","TypeScript","JavaScript"][index%4]!, index%5===0 ? 4100 : 600+index%3*650,x,y));
+}
+
+export type CityView = "city" | "forest" | "bridge" | "landmarks" | "energy" | "world";
 
 export class GroundedCityScene extends WorldScene {
   private inspectHandler: ((inspection: ForestInspection) => void) | undefined;
@@ -80,6 +94,8 @@ export class GroundedCityScene extends WorldScene {
   private latestWorld: WorldState | null = null;
   private activity: ForestActivity = null;
   private hasHydratedWorld = false;
+  private reserveBuilt = false;
+  private currentView: CityView = "city";
 
   constructor() {
     super();
@@ -92,6 +108,13 @@ export class GroundedCityScene extends WorldScene {
     // road system. Grounded's extra reserve and infrastructure textures extend
     // that same world rather than replacing it with a decorative overlay.
     bakeTextures(this);
+    bakeArchitecture(this);
+    bakeEnergy(this);
+    this.events.once("shutdown", () => {
+      this.forestReserveObjects.forEach(object => this.tweens.killTweensOf(object));
+      this.forestReserveObjects = [];
+      this.reserveBuilt = false;
+    });
   }
 
   setInspectHandler(handler: ((inspection: ForestInspection) => void) | undefined): void {
@@ -109,6 +132,9 @@ export class GroundedCityScene extends WorldScene {
       background: "#163e2c",
     });
     this.drawForestReserve();
+    this.drawSignatureFacilities();
+    this.clearLandmarkProps();
+    this.expandCameraBounds();
     this.syncEvidenceTrees(world.trees, this.hasHydratedWorld);
     this.syncFacilityLabels();
     this.applyActivity();
@@ -116,175 +142,66 @@ export class GroundedCityScene extends WorldScene {
   }
 
   private drawForestReserve(): void {
-    this.forestReserveObjects.forEach((object) => object.destroy());
-    this.forestReserveObjects = [];
-    this.signatureFacilities.clear();
-
-    // Paint an explicit tiled channel before any land. The old scene relied on
-    // the camera background for this gap, which made the crossing read as a
-    // bridge laid across grass. These animated blue tiles establish a real
-    // water body between two independent shorelines.
-    for (let gx = -8; gx <= -1; gx += 1) {
-      for (let gy = 7; gy <= 15; gy += 1) {
-        const point = projection.project(gx, gy);
-        const water = this.add.sprite(
-          point.x,
-          point.y + TILE_ANCHOR_Y,
-          WORLD_TEXTURES.water[Math.abs(gx * 7 + gy * 5) % WORLD_TEXTURES.water.length]!,
-        ).setOrigin(0.5, 1).setDepth(GROUND_DEPTH + 1);
-        this.forestReserveObjects.push(water);
-      }
+    if (this.reserveBuilt) return;
+    this.reserveBuilt = true;
+    this.forestReserveObjects.push(...addReserve(this));
+    const { fieldStation, watchtower, rangerLodge, sensor } = RESERVE_STRUCTURES;
+    this.addReserveStructure(fieldStation.gx, fieldStation.gy, "bld-resilienceHall", 1.1, "Forest field station", "Illustrative reserve infrastructure, not independently validated ecology telemetry.");
+    this.addReserveStructure(watchtower.gx, watchtower.gy, "bld-watchtower", 1, "Canopy watchtower", "Illustrative observation station. Evidence trees elsewhere link to completed resilience runs.");
+    this.addReserveStructure(rangerLodge.gx, rangerLodge.gy, WORLD_TEXTURES.forestCabin, 1.1, "Ranger lodge", "Illustrative conservation workspace; not a claimed real Jaipur facility.");
+    this.addReserveStructure(sensor.gx, sensor.gy, WORLD_TEXTURES.forestSensor, 1, "Environmental sensor", "Illustrative sensor; no live field feed is connected.");
+    for (const [i,gy] of [3,9,15].entries()) {
+      this.forestReserveObjects.push(...addWindTurbine(this,45,gy,{phase:i*65}).objects);
     }
-
-    // Authored reserve island: sand shoreline, planted interior and a pair of
-    // connected trails. Its east shore stops at x=-7; the mainland begins at
-    // x=0, leaving six complete water cells under the bridge.
-    for (let gx = -16; gx <= -7; gx += 1) {
-      for (let gy = 4; gy <= 18; gy += 1) {
-        const dx = (gx + 11.5) / 5.2;
-        const dy = (gy - 11) / 7.65;
-        const distance = dx * dx + dy * dy;
-        if (distance > 1.08) continue;
-        const edge = distance > 0.71;
-        const trail = !edge && ((gy === 11 && gx >= -14) || (gx === -11 && gy >= 7 && gy <= 16));
-        const point = projection.project(gx, gy);
-        const sprite = this.add.sprite(
-          point.x,
-          point.y + TILE_ANCHOR_Y,
-          TERRAIN_ATLAS_KEY,
-          terrainTextureKey(edge || trail ? "sand" : "park", Math.abs(gx * 11 + gy * 7) % 2),
-        ).setOrigin(0.5, 1).setDepth(GROUND_DEPTH + 5);
-        this.forestReserveObjects.push(sprite);
-      }
-    }
-
-    const wetlandPoint = projection.project(-14, 10);
-    const wetland = this.add.image(wetlandPoint.x, wetlandPoint.y + TILE_ANCHOR_Y, WORLD_TEXTURES.wetland)
-      .setOrigin(0.5, 1).setDepth(GROUND_DEPTH + 7).setScale(1.12);
-    this.forestReserveObjects.push(wetland);
-
-    this.drawForestBridge();
-
-    // Deliberate groves use the fuller vegetation library from the supplied
-    // city reference: broadleaf, flowering, ancient, pine, palm and understory.
-    const contextTrees: ReadonlyArray<readonly [number, number, string, number]> = [
-      [-15, 7, "tree-ancient", .82], [-13, 6, "tree-oak", .74], [-9, 6, WORLD_TEXTURES.pine, .96],
-      [-15, 13, "tree-flowering", .78], [-13, 15, "tree-oak", .84], [-8, 14, WORLD_TEXTURES.palm, .88],
-      [-15, 11, WORLD_TEXTURES.bush, .76], [-12, 8, "tree-flowering", .72], [-8, 7, "tree-ancient", .78],
-      [-14, 17, WORLD_TEXTURES.pine, .92], [-8, 16, "tree-oak", .78], [-12, 17, WORLD_TEXTURES.bush, .74],
-      [-10, 13, "tree-ancient", .76], [-13, 12, WORLD_TEXTURES.palm, .78], [-9, 17, "tree-flowering", .72],
-    ];
-    contextTrees.forEach(([gx, gy, key, scale], index) => {
-      const point = projection.project(gx, gy);
-      const tree = this.add.image(point.x, point.y + TILE_ANCHOR_Y, key)
-        .setOrigin(0.5, 1)
-        .setDepth(projection.depth(gx, gy) + 1)
-        .setScale(scale);
-      if (key !== WORLD_TEXTURES.bush && index % 3 === 0) {
-        this.tweens.add({ targets: tree, angle: index % 2 === 0 ? 1.1 : -1.1, duration: 2_700 + index * 65, yoyo: true, repeat: -1, ease: "Sine.InOut" });
-      }
-      this.forestReserveObjects.push(tree);
-    });
-
-    this.addReserveStructure(-11, 6, "bld-resilienceHall", .69, "Forest operations pavilion", "Coordinates canopy, heat and habitat monitoring for the reserve.");
-    this.addReserveStructure(-8, 9, "bld-watchtower", .66, "Canopy watchtower", "A modelled observation point for heat, wind and fire-risk sensing.");
-    this.addReserveStructure(-14, 15, WORLD_TEXTURES.forestCabin, .78, "Field ecology lab", "A modelled workspace for ground-truth sampling and restoration crews.");
-    this.addReserveStructure(-10, 16, WORLD_TEXTURES.forestSensor, .78, "Biodiversity sensor", "Represents non-personal environmental sensing inside the reserve.");
-
-    // Waterline glints make the separation legible even at the default camera
-    // zoom without adding labels or interface chrome.
-    for (const [gx, gy, delay] of [[-7.2, 8.2, 0], [-6.2, 10.2, 360], [-5.2, 12.4, 720], [-3.2, 14.1, 1_080]] as const) {
-      const point = projection.project(gx, gy);
-      const glint = this.add.image(point.x, point.y + 4, WORLD_TEXTURES.sparkle)
-        .setDepth(GROUND_DEPTH + 10).setScale(1.5, .8).setAlpha(.28);
-      this.tweens.add({ targets: glint, x: glint.x + 18, alpha: .76, duration: 1_500, delay, yoyo: true, repeat: -1, ease: "Sine.InOut" });
-      this.forestReserveObjects.push(glint);
-    }
-
-    this.drawSignatureFacilities();
+    this.forestReserveObjects.push(...addPylonLine(this,[{gx:45,gy:21},{gx:45,gy:27},{gx:45,gy:33},{gx:39,gy:33}]).objects);
   }
 
-  private drawForestBridge(): void {
-    const bridge = this.add.graphics().setDepth(GROUND_DEPTH + 14);
-    const centers = Array.from({ length: 8 }, (_, index) => projection.project(-7 + index, 11));
-
-    // Reflections, masonry piers and their waterline shadows sit below the
-    // deck. Drawing these explicitly is what makes the span feel supported.
-    for (const index of [2, 4, 6]) {
-      const point = centers[index]!;
-      bridge.fillStyle(0x1b779e, 0.34);
-      bridge.fillEllipse(point.x, point.y + 42, 50, 13);
-      bridge.fillStyle(0x706653, 1);
-      bridge.fillPoints([
-        new Phaser.Geom.Point(point.x - 8, point.y + 4),
-        new Phaser.Geom.Point(point.x + 8, point.y + 11),
-        new Phaser.Geom.Point(point.x + 8, point.y + 43),
-        new Phaser.Geom.Point(point.x - 8, point.y + 36),
-      ], true);
-      bridge.fillStyle(0x9a8f75, 1);
-      bridge.fillRect(point.x - 11, point.y + 6, 22, 7);
+  private clearLandmarkProps(): void {
+    for (const prop of this.terrainManager.propSprites) {
+      if (prop.texture.key.includes("capitol")) continue;
+      const {x,y}=projection.unproject(prop.x,prop.y-TILE_ANCHOR_Y);
+      const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
+      const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
+      if (insideLandmark(x,y)||approach||energy) prop.setVisible(false);
     }
+  }
 
-    centers.forEach((point, index) => {
-      const top = new Phaser.Geom.Point(point.x, point.y - 18);
-      const right = new Phaser.Geom.Point(point.x + 39, point.y);
-      const bottom = new Phaser.Geom.Point(point.x, point.y + 18);
-      const left = new Phaser.Geom.Point(point.x - 39, point.y);
-      bridge.fillStyle(index % 2 === 0 ? 0xc8a66e : 0xb9905b, 1);
-      bridge.fillPoints([top, right, bottom, left], true);
-      bridge.lineStyle(1, 0x6d4b2d, 0.72);
-      bridge.strokePoints([top, right, bottom, left], true);
-      bridge.lineBetween(left.x + 13, left.y + 6, right.x - 13, right.y - 6);
-    });
+  private expandCameraBounds(): void {
+    this.cameras.main.setBounds(-4700,-2400,9500,6500);
+  }
 
-    const first = centers[0]!;
-    const last = centers[centers.length - 1]!;
-    const sideAStart = { x: first.x - 18, y: first.y + 9 };
-    const sideAEnd = { x: last.x - 18, y: last.y + 9 };
-    const sideBStart = { x: first.x + 18, y: first.y - 9 };
-    const sideBEnd = { x: last.x + 18, y: last.y - 9 };
-    bridge.lineStyle(3, 0x285a43, 1);
-    bridge.lineBetween(sideAStart.x, sideAStart.y - 18, sideAEnd.x, sideAEnd.y - 18);
-    bridge.lineBetween(sideBStart.x, sideBStart.y - 18, sideBEnd.x, sideBEnd.y - 18);
-    bridge.lineStyle(2, 0x6f9d75, 1);
-    bridge.lineBetween(sideAStart.x, sideAStart.y - 9, sideAEnd.x, sideAEnd.y - 9);
-    bridge.lineBetween(sideBStart.x, sideBStart.y - 9, sideBEnd.x, sideBEnd.y - 9);
+  override fitCamera(): void {
+    if (!this.cameraController) return;
+    this.showDistrict(this.currentView, false);
+  }
 
-    centers.forEach((point, index) => {
-      if (index % 2 !== 0 && index !== centers.length - 1) return;
-      for (const side of [-1, 1]) {
-        const x = point.x + side * 18;
-        const y = point.y - side * 9;
-        bridge.lineStyle(3, 0x285a43, 1);
-        bridge.lineBetween(x, y + 3, x, y - 22);
-        bridge.fillStyle(0xf2cf70, 0.95);
-        bridge.fillCircle(x, y - 24, 3.5);
-        bridge.fillStyle(0xf4df8d, 0.18);
-        bridge.fillCircle(x, y - 24, 9);
-      }
-    });
-    this.forestReserveObjects.push(bridge);
+  override resizeViewport(width: number, height: number): void {
+    super.resizeViewport(width, height);
+    if (this.latestWorld && this.scene?.isActive()) this.showDistrict(this.currentView, false);
+  }
 
-    // Stone abutments visually lock both ends into land instead of letting
-    // the timber deck terminate over open water.
-    for (const gx of [-7.45, 0.45]) {
-      const point = projection.project(gx, 11);
-      const abutment = this.add.graphics().setDepth(GROUND_DEPTH + 13);
-      abutment.fillStyle(0x8d856f, 1);
-      abutment.fillPoints([
-        new Phaser.Geom.Point(point.x - 29, point.y - 2),
-        new Phaser.Geom.Point(point.x, point.y - 16),
-        new Phaser.Geom.Point(point.x + 29, point.y - 2),
-        new Phaser.Geom.Point(point.x, point.y + 13),
-      ], true);
-      abutment.lineStyle(2, 0xb5aa90, 1);
-      abutment.strokePoints([
-        new Phaser.Geom.Point(point.x - 29, point.y - 2),
-        new Phaser.Geom.Point(point.x, point.y - 16),
-        new Phaser.Geom.Point(point.x + 29, point.y - 2),
-        new Phaser.Geom.Point(point.x, point.y + 13),
-      ], true);
-      this.forestReserveObjects.push(abutment);
+  showDistrict(view: CityView, animate = true): void {
+    this.currentView=view;
+    this.expandCameraBounds();
+    const camera=this.cameras.main;
+    let corners: Array<readonly [number,number]>;
+    if(view==="forest") corners=[[-45,-3],[-21,-3],[-21,27],[-45,27]];
+    else if(view==="bridge") corners=[[RESERVE.bridgeStart-3,7],[0,7],[0,17],[RESERVE.bridgeStart-3,17]];
+    else if(view==="landmarks") corners=[[28,17],[43,17],[43,32],[28,32]];
+    else if(view==="energy") corners=[[37,-1],[49,-1],[49,35],[37,35]];
+    else if(view==="world") corners=[[-45,-3],[49,-5],[49,43],[-15,49],[-45,27]];
+    else corners=[[-6,-4],[50,-4],[50,40],[-8,45]];
+    const points=corners.map(([x,y])=>projection.project(x,y));
+    const left=Math.min(...points.map(p=>p.x))-100, right=Math.max(...points.map(p=>p.x))+100;
+    const top=Math.min(...points.map(p=>p.y))-300, bottom=Math.max(...points.map(p=>p.y))+70;
+    const zoom=Phaser.Math.Clamp(Math.min((camera.width-40)/(right-left),(camera.height-40)/(bottom-top)),MIN_ZOOM,1);
+    if(animate && !prefersReducedMotion()){
+      this.cameraController.noteCameraInput();
+      this.cameraController.moveCameraTo((left+right)/2,(top+bottom)/2,zoom);
+    } else {
+      this.cameraController.focusTween?.stop();
+      this.cameraController.zoomTarget=zoom;
+      camera.setZoom(zoom).centerOn((left+right)/2,(top+bottom)/2);
     }
   }
 
@@ -321,48 +238,33 @@ export class GroundedCityScene extends WorldScene {
       label.setVisible(false);
     });
     structure.on("pointerup", () => this.inspectHandler?.(contextInspection(title, evidence)));
-    this.tweens.add({ targets: pulse, y: pulse.y - 10, alpha: .95, duration: 1_150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
+    if (!prefersReducedMotion()) this.tweens.add({ targets: pulse, y: pulse.y - 10, alpha: .95, duration: 1_150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
     this.forestReserveObjects.push(structure, label, pulse);
   }
 
   private drawSignatureFacilities(): void {
-    const facilities: ReadonlyArray<{
-      path: string;
-      gx: number;
-      gy: number;
-      texture: string;
-      scale: number;
-    }> = [
-      { path: "facility/critical-care", gx: 7, gy: 13, texture: WORLD_TEXTURES.hospital, scale: .66 },
-      { path: "facility/solar-field", gx: 1, gy: 19, texture: WORLD_TEXTURES.solarArray, scale: .76 },
-      { path: "facility/storage-control", gx: 31, gy: 19, texture: WORLD_TEXTURES.battery, scale: .79 },
-      { path: "facility/grid-intertie", gx: 31, gy: 7, texture: WORLD_TEXTURES.substation, scale: .78 },
-      { path: "facility/water-security", gx: 1, gy: 13, texture: "bld-reservoir", scale: .69 },
-      { path: "facility/emergency-comms", gx: 13, gy: 7, texture: "bld-watchtower", scale: .67 },
-      { path: "facility/heat-shelter", gx: 19, gy: 13, texture: "bld-resilienceHall", scale: .68 },
-      { path: "facility/microgrid-command", gx: 25, gy: 13, texture: WORLD_TEXTURES.cityOffice, scale: .62 },
-      { path: "facility/forecast-tower", gx: 25, gy: 19, texture: WORLD_TEXTURES.cityTower, scale: .59 },
-      { path: "facility/recovery-depot", gx: 13, gy: 25, texture: WORLD_TEXTURES.portWarehouse, scale: .68 },
+    // Keep the archive building view: its click, construction crew and crane
+    // continue to operate on the real visible sprite, not a hidden placeholder.
+    const facilities = [
+      {path:"facility/solar-field",texture:WORLD_TEXTURES.solarArray,scale:1.2,anchor:18},
+      {path:"facility/storage-control",texture:WORLD_TEXTURES.battery,scale:1.2,anchor:14},
+      {path:"facility/grid-intertie",texture:WORLD_TEXTURES.substation,scale:1.2,anchor:18},
+      {path:"facility/water-security",texture:"bld-reservoir",scale:1,anchor:16},
+      ...LANDMARK_SITES.map(site=>({path:site.path,texture:ARCHITECTURE[site.kind].key,scale:1,anchor:ARCHITECTURE[site.kind].anchorY})),
     ];
-
-    facilities.forEach(({ path, gx, gy, texture, scale }) => {
-      const point = projection.project(gx, gy);
-      const underlying = this.buildingManager.getViews().get(path)?.sprite;
-      underlying?.setVisible(false);
-      const image = this.add.image(point.x, point.y + TILE_ANCHOR_Y, texture)
-        .setOrigin(.5, 1)
-        .setDepth(projection.depth(gx, gy) + 5)
-        .setScale(scale)
-        .setInteractive({ useHandCursor: true });
-      image.on("pointerover", () => image.setScale(scale * 1.04));
-      image.on("pointerout", () => image.setScale(scale));
-      image.on("pointerup", () => {
-        const inspection = STATIC_INSPECTIONS[path];
-        if (inspection) this.inspectHandler?.(inspection);
-      });
-      this.signatureFacilities.set(path, image);
-      this.forestReserveObjects.push(image);
-    });
+    for(const facility of facilities) {
+      const view=this.buildingManager.getViews().get(facility.path);
+      if(!view) continue;
+      const {x,y}=view.building.plot, p=projection.project(x,y);
+      const sprite=view.sprite;
+      sprite.setTexture(facility.texture).setOrigin(.5,1).setScale(facility.scale)
+        .setPosition(p.x,p.y+facility.anchor*facility.scale)
+        .setDepth(projection.depth(x,y)+5);
+      // Texture padding scales with the sprite; the grid's ground anchor does not.
+      sprite.setData("constructionAnchorOffset", facility.anchor*facility.scale-TILE_ANCHOR_Y);
+      sprite.setInteractive({ pixelPerfect: true, useHandCursor: true });
+      this.signatureFacilities.set(facility.path,sprite);
+    }
   }
 
   setActivity(activity: ForestActivity): void {
@@ -395,6 +297,10 @@ export class GroundedCityScene extends WorldScene {
     }
     const context = STATIC_INSPECTIONS[building.path];
     if (context) this.inspectHandler?.(context);
+    else {
+      const landmark=LANDMARK_SITES.find(site=>site.path===building.path);
+      this.inspectHandler?.(contextInspection(landmark?.title ?? "City neighbourhood", "Illustrative city architecture. It is not a surveyed Jaipur building and does not add an independently simulated service."));
+    }
   }
 
   private syncEvidenceTrees(trees: Tree[], animateNew: boolean): void {
@@ -410,8 +316,8 @@ export class GroundedCityScene extends WorldScene {
       if (this.evidenceTrees.has(tree.id)) return;
       const [gx, gy] = FOREST_PLOTS[index % FOREST_PLOTS.length]!;
       const cycle = Math.floor(index / FOREST_PLOTS.length);
-      const px = gx - cycle * 0.38;
-      const py = gy + (cycle % 3) * 0.46;
+      const px = gx + (cycle % 3) * .18;
+      const py = gy + (Math.floor(cycle / 3) % 3) * .18;
       const point = projection.project(px, py);
       const key = tree.species === "sapling" ? propTextureKey("bush") : tree.species === "ancient" ? propTextureKey("pine") : propTextureKey("tree");
       const sprite = this.add.sprite(point.x, point.y + TILE_ANCHOR_Y, key)
@@ -441,6 +347,7 @@ export class GroundedCityScene extends WorldScene {
 
   /** Turns a completed simulation into an unmistakable, inspectable city event. */
   private revealEvidenceTree(tree: Tree, sprite: Phaser.GameObjects.Sprite): void {
+    if (prefersReducedMotion()) return;
     const targetScale = tree.species === "ancient" ? 1.34 : tree.species === "sapling" ? 0.78 : 1.08;
     sprite.setAlpha(0).setScale(0.08).setAngle(-4);
     this.cameraController.moveCameraTo(sprite.x, sprite.y - 34, FOCUS_ZOOM);
@@ -557,11 +464,11 @@ function snapshotFor(world: WorldState): WorldSnapshot {
     layoutVersion: 2,
     districts: [
       { path: "critical-care", x: 0, y: 0, width: 12, height: 18, weight: 28 },
-      { path: "operations", x: 12, y: 0, width: 24, height: 18, weight: 35 },
-      { path: "generation", x: 0, y: 18, width: 18, height: 12, weight: 18 },
-      { path: "storage", x: 18, y: 18, width: 18, height: 12, weight: 19 },
+      { path: "operations", x: 12, y: 0, width: 36, height: 18, weight: 35 },
+      { path: "generation", x: 0, y: 18, width: 18, height: 18, weight: 18 },
+      { path: "storage", x: 18, y: 18, width: 30, height: 18, weight: 19 },
     ],
-    buildings: [...STATIC_BUILDINGS, ...evidenceBuildings],
+    buildings: [...STATIC_BUILDINGS, ...NEIGHBOURHOODS, ...evidenceBuildings],
   };
 }
 
@@ -594,7 +501,7 @@ function buildingName(building: Building): string {
 }
 
 function contextInspection(title: string, evidence: string): ForestInspection {
-  return { kind: "building", title, status: "Modelled system asset", evidence, runId: "system-context", occurredAt: 0 };
+  return { kind: "building", title, status: "Illustrative system context", evidence, runId: "system-context", occurredAt: 0 };
 }
 
 function titleCase(value: string): string {

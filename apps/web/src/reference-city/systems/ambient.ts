@@ -19,7 +19,7 @@ import {
   ROAD_SOUTH,
   ROAD_WEST,
 } from "../layouts/terrain";
-import { CAR_KEYS, WOODEN_SHIP_ANCHOR_Y, WOODEN_SHIP_KEYS } from "../textures/vehicles";
+import { CAR_KEYS, BUS_KEYS, trafficHeadingKey, WOODEN_SHIP_ANCHOR_Y, WOODEN_SHIP_KEYS } from "../textures/vehicles";
 import { CLOUD_KEY, SMOKE_KEY, SPARKLE_KEY } from "../textures/effects";
 import { TILE_ANCHOR_Y, TILE_HEIGHT, TILE_WIDTH } from "../textures/core";
 
@@ -69,6 +69,8 @@ interface Car {
   sprite: Phaser.GameObjects.Sprite;
   cell: TerrainCell;
   from?: TerrainCell;
+  texture: string;
+  bus: boolean;
 }
 
 /** One leg of a wooden ship's lap, in grid space. */
@@ -264,21 +266,27 @@ export class AmbientLife {
 
     const count = Math.min(MAX_CARS, Math.floor(drivable.length / 8));
     for (let index = 0; index < count; index += 1) {
-      const cell = pool[
-        pickIndex(hashCoords(index, index * 7, 0xca4), pool.length)
+      const bus = index % 6 === 0;
+      const busPool = bus ? pool.filter((cell) => cell.roadClass !== "lane") : pool;
+      const spawnPool = busPool.length ? busPool : pool;
+      const cell = spawnPool[
+        pickIndex(hashCoords(index, index * 7, 0xca4), spawnPool.length)
       ] as TerrainCell;
+      const texture = bus
+        ? BUS_KEYS[Math.floor(index / 6) % BUS_KEYS.length]!
+        : CAR_KEYS[index % CAR_KEYS.length]!;
       const point = this.projection.project(cell.x, cell.y);
       const sprite = this.scene.add
         .sprite(
           point.x,
           point.y + TILE_ANCHOR_Y,
-          CAR_KEYS[index % CAR_KEYS.length] as string,
+          texture,
         )
         .setOrigin(0.5, 1)
         .setDepth(this.projection.depth(cell.x, cell.y));
 
       this.traffic?.add(sprite);
-      const car: Car = { sprite, cell };
+      const car: Car = { sprite, cell, texture, bus };
       this.cars.push(car);
       // Stagger departures so they do not all move in lockstep.
       this.carTimers.push(
@@ -304,7 +312,11 @@ export class AmbientLife {
     const forward = options.filter(
       (cell) => !(cell.x === car.from?.x && cell.y === car.from?.y),
     );
-    const choices = forward.length > 0 ? forward : options;
+    const onward = forward.length > 0 ? forward : options;
+    // Buses use the same archive road network but prefer roads wide enough
+    // for transit. A narrow connection is allowed only to leave a dead end.
+    const transit = car.bus ? onward.filter((cell) => cell.roadClass !== "lane") : onward;
+    const choices = transit.length ? transit : onward;
 
     // At a junction with a choice of roads, usually take the widest one on
     // offer -- hash-driven on the car's own position, not Math.random, so the
@@ -323,6 +335,7 @@ export class AmbientLife {
     const next = pool[Math.floor(Math.random() * pool.length)] as TerrainCell;
 
     const point = this.projection.project(next.x, next.y);
+    car.sprite.setTexture(trafficHeadingKey(car.texture, next.x - car.cell.x, next.y - car.cell.y));
     car.from = car.cell;
     car.cell = next;
 
@@ -330,7 +343,7 @@ export class AmbientLife {
       targets: car.sprite,
       x: point.x,
       y: point.y + TILE_ANCHOR_Y,
-      duration: CAR_TILE_MS,
+      duration: car.bus ? CAR_TILE_MS * 1.2 : CAR_TILE_MS,
       ease: "Linear",
       onComplete: () => {
         car.sprite.setDepth(this.projection.depth(next.x, next.y));
@@ -456,7 +469,8 @@ export class AmbientLife {
       const sprite = this.scene.add
         .sprite(point.x, point.y + WOODEN_SHIP_ANCHOR_Y, WOODEN_SHIP_KEYS[0]!)
         .setOrigin(0.5, 1)
-        .setDepth(this.projection.depth(start.p[0], start.p[1]));
+        // Water traffic stays beneath bridge decks and shoreline structures.
+        .setDepth(this.depths.traffic);
       this.woodenShips.push(sprite);
 
       const state = { t: startT };
@@ -481,7 +495,7 @@ export class AmbientLife {
     const point = this.projection.project(p[0], p[1]);
     sprite
       .setPosition(point.x, point.y + WOODEN_SHIP_ANCHOR_Y)
-      .setDepth(this.projection.depth(p[0], p[1]));
+      .setDepth(this.depths.traffic);
 
     // Bow is authored toward -v at frame 0 (see bakeWoodenShip): a bow
     // pointing along unit heading (du, dv) needs sin(theta) = du,

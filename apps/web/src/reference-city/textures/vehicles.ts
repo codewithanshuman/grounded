@@ -1,43 +1,133 @@
-import { Baker, TILE_ANCHOR_Y, fillFace, diamond, HALF_W, shade, TILE_WIDTH, Point3 } from "./core";
+import { Baker, TILE_ANCHOR_Y, fillFace, shade, TILE_WIDTH, Point3 } from "./core";
 import { TERRAIN_COLORS } from "../math/palette";
 import { SHIP_HEADING_FRAMES, shipHeadingAngle } from "./harbour/ship";
 import { harbourPost } from "./harbour/base";
 
 export const CAR_KEYS = ["fx:car:0", "fx:car:1", "fx:car:2", "fx:car:3"] as const;
+export const BUS_KEYS = ["fx:bus:0", "fx:bus:1"] as const;
 
 
-export const CAR_COLORS = [0xe4572e, 0x2e86ab, 0xf6f5ae, 0x4a4e69] as const;
+export const CAR_COLORS = [0xe26943, 0x357fa9, 0xf2eacb, 0x586575, 0x429681, 0xd2a64c] as const;
 
 
-export const CAR_TEXTURE_HEIGHT = 44;
+export const CAR_TEXTURE_HEIGHT = 76;
+
+/** The vehicle's nose is -v at frame zero; height stays vertical at every heading. */
+export function trafficHeadingKey(key: string, dx: number, dy: number): string {
+  const frame = dx > 0 ? 1 : dy > 0 ? 2 : dx < 0 ? 3 : 0;
+  return frame === 0 ? key : `${key}:heading:${frame}`;
+}
 
 
 export function bakeCar(baker: Baker, key: string, index: number): void {
-  const color = CAR_COLORS[index] as number;
-  // Tile-anchored like every other sprite: origin (0.5, 1) at the tile's
-  // bottom corner, so the drawing origin sits TILE_ANCHOR_Y above the bottom.
-  const originY = CAR_TEXTURE_HEIGHT - TILE_ANCHOR_Y;
-  fillFace(baker, TERRAIN_COLORS.shadow, 0.25, diamond(0.1), HALF_W, originY);
-  fillFace(baker, color, 1, [
-    [-0.1, -0.06, 7],
-    [0.1, -0.06, 7],
-    [0.1, 0.06, 7],
-    [-0.1, 0.06, 7],
-  ], HALF_W, originY);
-  fillFace(baker, shade(color, -22), 1, [
-    [0.1, -0.06, 7],
-    [0.1, 0.06, 7],
-    [0.1, 0.06, 0],
-    [0.1, -0.06, 0],
-  ], HALF_W, originY);
-  fillFace(baker, shade(color, -10), 1, [
-    [-0.1, 0.06, 7],
-    [0.1, 0.06, 7],
-    [0.1, 0.06, 0],
-    [-0.1, 0.06, 0],
-  ], HALF_W, originY);
+  for (let heading = 0; heading < 4; heading += 1) {
+    bakeRoadVehicle(baker, heading === 0 ? key : `${key}:heading:${heading}`, index, heading);
+  }
+}
 
-  baker.finish(key, TILE_WIDTH, CAR_TEXTURE_HEIGHT);
+/**
+ * Uses the archive's heading-baked ship technique for actual car bodies, not
+ * screen rotation: roofs, tyres and cabin height remain in the isometric plane.
+ * Sedans occupy .70 x .32 tiles; buses 1.10 x .36, within the wider road lanes.
+ */
+function bakeRoadVehicle(source: Baker, key: string, index: number, heading: number): void {
+  const bus = index >= CAR_KEYS.length;
+  const paint = CAR_COLORS[index % CAR_COLORS.length]!;
+  const length = bus ? 0.55 : 0.35;
+  const halfWidth = bus ? 0.18 : 0.16;
+  const height = bus ? 21 : 9;
+  const ox = TILE_WIDTH / 2;
+  const oy = CAR_TEXTURE_HEIGHT - TILE_ANCHOR_Y;
+  const angle = heading * Math.PI / 2;
+  const cos = Math.round(Math.cos(angle));
+  const sin = Math.round(Math.sin(angle));
+  const baker: Baker = {
+    ...source,
+    at: ([u, v, z], x, y) => source.at([u * cos - v * sin, u * sin + v * cos, z], x, y),
+  };
+  const face = (color: number, points: readonly Point3[], alpha = 1) => fillFace(baker, color, alpha, points, ox, oy);
+  const visible = (u: number, v: number) => u * (cos + sin) + v * (cos - sin) > 0;
+  const box = (u0: number, v0: number, u1: number, v1: number, z0: number, z1: number, color: number) => {
+    for (const side of [-1, 1]) {
+      if (visible(side, 0)) {
+        const u = side < 0 ? u0 : u1;
+        face(shade(color, side * (cos + sin) > 0 ? -16 : -30), [[u,v0,z0],[u,v1,z0],[u,v1,z1],[u,v0,z1]]);
+      }
+      if (visible(0, side)) {
+        const v = side < 0 ? v0 : v1;
+        face(shade(color, -25), [[u0,v,z0],[u1,v,z0],[u1,v,z1],[u0,v,z1]]);
+      }
+    }
+    face(shade(color, 12), [[u0,v0,z1],[u1,v0,z1],[u1,v1,z1],[u0,v1,z1]]);
+  };
+  face(TERRAIN_COLORS.shadow, [[-.22,-length-.06,0],[.23,-length-.06,0],[.23,length+.07,0],[-.22,length+.07,0]], .22);
+  box(-halfWidth,-length,halfWidth,length,3,height,paint);
+  // Contrasting lower sill and bumpers keep the body separated from its shadow.
+  box(-halfWidth,-length-.012,halfWidth,-length+.035,3,5,0x384852);
+  box(-halfWidth,length-.03,halfWidth,length+.012,3,5,0x384852);
+  for (const side of [-1, 1]) {
+    if (!visible(side, 0)) continue;
+    const u = side * (halfWidth + .006);
+    face(bus ? 0xf2ebd7 : shade(paint,-15), [[u,-length,5],[u,length,5],[u,length,7],[u,-length,7]]);
+    // Wheel faces are circles in their own vertical plane, then projected.
+    for (const v of [-(length-.13),length-.13]) {
+      const wheel: Point3[] = Array.from({length: 12}, (_unused,n) => {
+        const a = n * Math.PI / 6;
+        return [u,v+Math.cos(a)*.052,3.3+Math.sin(a)*3.2];
+      });
+      face(0x1c2931,wheel);
+      const hub: Point3[] = Array.from({length: 10}, (_unused,n) => {
+        const a = n * Math.PI / 5;
+        return [u,v+Math.cos(a)*.025,3.3+Math.sin(a)*1.6];
+      });
+      face(0xb2bcc0,hub);
+    }
+  }
+  if (bus) {
+    for (const side of [-1,1]) {
+      if (!visible(side,0)) continue;
+      const u=side*(halfWidth+.008);
+      for(let window=0;window<6;window+=1) {
+        const v=-.47+window*.151;
+        face(0x223e51,[[u,v,11],[u,v+.126,11],[u,v+.126,18],[u,v,18]]);
+        face(0x86bbc7,[[u,v,17],[u,v+.126,17],[u,v+.126,18],[u,v,18]],.7);
+      }
+      // Passenger door: dark double leaf and a slim silver divider.
+      face(0x193343,[[u,-.48,5],[u,-.33,5],[u,-.33,18],[u,-.48,18]]);
+      face(0xb9c9c6,[[u,-.408,5],[u,-.40,5],[u,-.40,18],[u,-.408,18]]);
+    }
+    box(-.10,-.10,.10,.20,height,height+2.7,0xdce5df);
+    for(let vent=0;vent<5;vent+=1) {
+      const v=-.07+vent*.047;
+      face(0x7b918f,[[-.065,v,height+2.8],[.065,v,height+2.8],[.065,v+.016,height+2.8],[-.065,v+.016,height+2.8]]);
+    }
+    if(visible(0,-1)) {
+      face(0x254658,[[-.145,-length-.008,9],[.145,-length-.008,9],[.145,-length-.008,18],[-.145,-length-.008,18]]);
+      face(0xeac576,[[-.09,-length-.01,18.4],[.09,-length-.01,18.4],[.09,-length-.01,20],[-.09,-length-.01,20]]);
+    }
+  } else {
+    // Sloped glazing and raised metal roof, with side pillars rather than a cube.
+    const roof=15;
+    const a=-.12, b=.17;
+    for(const side of [-1,1]) {
+      if(!visible(side,0)) continue;
+      face(shade(paint,-12),[[side*.15,-.23,9],[side*.15,.23,9],[side*.115,b,roof],[side*.115,a,roof]]);
+      face(0x24475a,[[side*.152,-.20,9.7],[side*.152,-.008,9.7],[side*.118,-.008,14.2],[side*.118,-.11,14.2]]);
+      face(0x294e60,[[side*.152,.011,9.7],[side*.152,.21,9.7],[side*.118,.156,14.2],[side*.118,.011,14.2]]);
+    }
+    if(visible(0,-1)) face(0x81aab5,[[-.15,-.23,9],[.15,-.23,9],[.115,a,roof],[-.115,a,roof]]);
+    if(visible(0,1)) face(0x345c6a,[[-.15,.23,9],[.15,.23,9],[.115,b,roof],[-.115,b,roof]]);
+    face(shade(paint,18),[[-.115,a,roof],[.115,a,roof],[.115,b,roof],[-.115,b,roof]]);
+  }
+  for(const end of [-1,1]) {
+    if(!visible(0,end)) continue;
+    const v=end*(length+.016);
+    for(const side of [-1,1]) {
+      const u=side*(halfWidth-.043);
+      face(end<0 ? 0xfff3c9 : 0xef6257,[[u-.025,v,6],[u+.025,v,6],[u+.025,v,8.4],[u-.025,v,8.4]]);
+    }
+  }
+  source.finish(key,TILE_WIDTH,CAR_TEXTURE_HEIGHT);
 }
 
 

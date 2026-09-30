@@ -1,8 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import type { ClimateCalibration, ClimateSweepResult, LocationId, MicrogridConfig, PresetId, RunSummary, SiteDataProfile } from "@verdant/protocol";
 import { LOCATIONS, PRESETS, DEFAULT_CONFIG } from "@verdant/sim";
 import { useVerdant, type CommissionSiteInput, type OptimizeResponse } from "./ws/client";
 import { TwinPanel, StressPanel } from "./hud/ControlPanels";
+import { DecisionWorkspace } from "./hud/DecisionWorkspace";
+import { AnalysisGate, analysisInputKey, changedRunInputs, inputIssues, inputsForRun } from "./lib/analysisContext";
 import logoUrl from "../../../assets/logo.png";
 import canopyUrl from "../../../assets/forest-canopy-ui.webp";
 import { IdentityDialog } from "./auth/IdentityDialog";
@@ -34,7 +36,7 @@ const OptimizerPanel = lazy(() => import("./hud/Panels").then((module) => ({ def
 const ComparePanel = lazy(() => import("./hud/Panels").then((module) => ({ default: module.ComparePanel })));
 const MethodologyPanel = lazy(() => import("./hud/MethodologyPanel").then((module) => ({ default: module.MethodologyPanel })));
 
-const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading verified workspace…</span></div>;
+const WorkspaceFallback = () => <div className="workspace-fallback"><i /><span>Loading workspace…</span></div>;
 
 const NAV_LABELS: Record<ViewId, string> = {
   overview: "Twin",
@@ -47,7 +49,7 @@ const NAV_LABELS: Record<ViewId, string> = {
 
 export default function App() {
   const { identity, ready: identityReady, error: identityError, cloudConfigured, signIn, signOut } = useIdentitySession();
-  const { world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant(identity);
+  const { connected, engineError, engineNotice, world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant(identity);
   const [identityOpen, setIdentityOpen] = useState(false);
   const [publicLabOpen, setPublicLabOpen] = useState(() => window.location.pathname === "/lab");
   const [isFoundingWorld, setIsFoundingWorld] = useState(false);
@@ -74,6 +76,21 @@ export default function App() {
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
   const [runElapsed, setRunElapsed] = useState(0);
+  const [riskTargetPct, setRiskTargetPct] = useState(1);
+  const [matrixInputKey, setMatrixInputKey] = useState<string | null>(null);
+  const gateRef = useRef(new AnalysisGate());
+  const inputs = { locationId, preset, config, scenarioCount, siteDataProfileId };
+  const inputsKey = analysisInputKey(inputs);
+  const selectedProfile = siteDataProfiles.find((profile) => profile.id === siteDataProfileId);
+  const sweepKey = analysisInputKey({ ...inputs, preset: "normal", scenarioCount: 500 }) + (selectedProfile?.fingerprint ?? "");
+  const requestContextRef = useRef("");
+  requestContextRef.current = `${identity?.id ?? "guest"}:${inputsKey}:${selectedProfile?.fingerprint ?? ""}`;
+  const configIssues = inputIssues(inputs);
+  const inputChanges = baseline ? changedRunInputs(baseline, inputs) : [];
+  if (baseline?.siteData?.id === selectedProfile?.id && baseline?.siteData?.fingerprint !== selectedProfile?.fingerprint) inputChanges.push("data revision");
+  const baselineIsCurrent = !!baseline && inputChanges.length === 0;
+  const matrixIsCurrent = !!climateSweep && matrixInputKey === sweepKey;
+  const dataReady = siteDataProfileId === "representative-model" || !!selectedProfile;
 
   useEffect(() => {
     const syncPath = () => setPublicLabOpen(window.location.pathname === "/lab");
@@ -114,59 +131,69 @@ export default function App() {
   const setConfigField = (key: keyof MicrogridConfig) => (val: number) => setConfig((c) => ({ ...c, [key]: val }));
 
   const runSimulation = useCallback(async () => {
+    if (!connected || isRunning || configIssues.length || !dataReady) return;
+    const ticket = gateRef.current.begin(requestContextRef.current);
+    if (!ticket) return;
     setIsSimulating(true);
     setOperationError(null);
-    setOptimized(null);
     try {
       const [{ summary }] = await Promise.all([
         simulate(locationId, preset, config, scenarioCount, siteDataProfileId),
         new Promise<void>((resolve) => window.setTimeout(resolve, 1_400)),
       ]);
+      if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setBaseline(summary);
+      setOptimized(null);
       setSelectedFailureSeed(summary.failures[0]?.seed ?? null);
       setIsSimulating(false);
       setIsRevealingEvidence(true);
       // Keep the twin visible long enough to show the verified tree taking
       // root. The causal report follows automatically after the world event.
       await new Promise<void>((resolve) => window.setTimeout(resolve, 2_350));
-      setIsRevealingEvidence(false);
-      setActiveView("risk");
+      if (gateRef.current.accepts(ticket, requestContextRef.current)) setActiveView("risk");
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "Simulation could not be completed.");
+      if (gateRef.current.accepts(ticket, requestContextRef.current)) setOperationError(error instanceof Error ? error.message : "Simulation could not be completed.");
     } finally {
-      setIsSimulating(false);
-      setIsRevealingEvidence(false);
+      if (gateRef.current.finish(ticket)) { setIsSimulating(false); setIsRevealingEvidence(false); }
     }
-  }, [simulate, locationId, preset, config, scenarioCount, siteDataProfileId]);
+  }, [simulate, locationId, preset, config, scenarioCount, siteDataProfileId, connected, isRunning, configIssues.length, dataReady]);
 
   const runOptimizer = useCallback(async () => {
-    if (!baseline) return;
+    if (!baseline || !baselineIsCurrent || isRunning || !connected) return;
+    const ticket = gateRef.current.begin(requestContextRef.current);
+    if (!ticket) return;
     setIsOptimizing(true);
     setOperationError(null);
     try {
       const result = await optimize(baseline.runId);
+      if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setOptimized(result);
       setActiveView("compare");
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "Optimization could not be completed.");
+      if (gateRef.current.accepts(ticket, requestContextRef.current)) setOperationError(error instanceof Error ? error.message : "Optimization could not be completed.");
     } finally {
-      setIsOptimizing(false);
+      if (gateRef.current.finish(ticket)) setIsOptimizing(false);
     }
-  }, [optimize, baseline]);
+  }, [optimize, baseline, baselineIsCurrent, isRunning, connected]);
 
   const runAllHazards = useCallback(async () => {
+    if (!connected || isRunning || configIssues.length || !dataReady) return;
+    const ticket = gateRef.current.begin(requestContextRef.current);
+    if (!ticket) return;
     setIsSweeping(true);
     setOperationError(null);
     try {
       const result = await runClimateSweep(locationId, config, 500, siteDataProfileId);
+      if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setClimateSweep(result);
+      setMatrixInputKey(sweepKey);
       setActiveView("matrix");
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : "Climate matrix could not be completed.");
+      if (gateRef.current.accepts(ticket, requestContextRef.current)) setOperationError(error instanceof Error ? error.message : "Climate matrix could not be completed.");
     } finally {
-      setIsSweeping(false);
+      if (gateRef.current.finish(ticket)) setIsSweeping(false);
     }
-  }, [runClimateSweep, locationId, config, siteDataProfileId]);
+  }, [runClimateSweep, locationId, config, siteDataProfileId, connected, isRunning, configIssues.length, dataReady, sweepKey]);
 
   // most-recent growth message, shown as a toast for a few seconds
   const [toast, setToast] = useState<string | null>(null);
@@ -182,24 +209,41 @@ export default function App() {
     setCalibration(null);
     getCalibration(locationId).then((result) => { if (!cancelled) setCalibration(result); }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [getCalibration, locationId]);
+  }, [getCalibration, locationId, identity?.id]);
 
   useEffect(() => {
     let cancelled = false;
     getSiteDataProfiles().then((result) => { if (!cancelled) setSiteDataProfiles(result.profiles); }).catch(() => undefined);
     return () => { cancelled = true; };
-  }, [getSiteDataProfiles]);
+  }, [getSiteDataProfiles, identity?.id]);
 
-  // Evidence is valid only for the exact blueprint and hazard that produced
-  // it. Editing an input invalidates stale results instead of silently showing
-  // a report for a different system.
+  // A new owner must not inherit another account's in-memory reports. Within
+  // one workspace, keep the last good snapshot and label changed inputs.
   useEffect(() => {
+    gateRef.current.invalidate();
     setBaseline(null);
     setOptimized(null);
     setSelectedFailureSeed(null);
     setClimateSweep(null);
+    setMatrixInputKey(null);
     setOperationError(null);
-  }, [locationId, preset, config, siteDataProfileId]);
+    setIsSimulating(false);
+    setIsOptimizing(false);
+    setIsSweeping(false);
+    setIsRevealingEvidence(false);
+    setActiveView("overview");
+    return () => gateRef.current.invalidate();
+  }, [identity?.id]);
+
+  const restoreRunInputs = () => {
+    if (!baseline || isRunning) return;
+    const recorded = inputsForRun(baseline);
+    setLocationId(recorded.locationId);
+    setPreset(recorded.preset);
+    setConfig(recorded.config);
+    setScenarioCount(recorded.scenarioCount);
+    setSiteDataProfileId(recorded.siteDataProfileId);
+  };
 
   const activeSiteData = siteDataProfiles.find((profile) => profile.id === siteDataProfileId) ?? null;
   const operationalDataLabel = activeSiteData?.scope === "COMMISSIONED_SITE"
@@ -208,6 +252,7 @@ export default function App() {
   const environmentLabel = activeSiteData?.scope === "PUBLIC_REFERENCE"
     ? `${LOCATIONS[locationId].label} climate × NSW operations`
     : activeSiteData?.scope === "COMMISSIONED_SITE" ? `${LOCATIONS[locationId].label} · commissioned operations` : LOCATIONS[locationId].label;
+  const cannotRun = isRunning || !connected || configIssues.length > 0 || !dataReady;
   const handleCommission = useCallback(async (input: CommissionSiteInput) => {
     const profile = await commissionSite(input);
     setSiteDataProfiles((profiles) => [...profiles.filter((item) => item.id !== profile.id), profile]);
@@ -239,7 +284,7 @@ export default function App() {
       <header className="lab-header">
         <div className="lab-brand">
           <span className="brand-mark"><img src={logoUrl} alt="Grounded" /></span>
-          <div><strong>Grounded</strong><span>Jaipur resilience lab</span></div>
+          <div><strong>Grounded</strong><span>Resilience workspace</span></div>
         </div>
         <nav className="lab-nav" aria-label="Analysis workspaces">
           {workspaces.map(({ id, label, index }) => (
@@ -249,6 +294,7 @@ export default function App() {
               disabled={id === "matrix" && !climateSweep || (id === "risk" || id === "optimizer") && !baseline || id === "compare" && !optimized}
               aria-current={activeView === id ? "page" : undefined}
               aria-label={label}
+              title={id === "matrix" && !climateSweep ? "Compare all five hazards from the Living twin" : (id === "risk" || id === "optimizer") && !baseline ? "Run a simulation to unlock this workspace" : id === "compare" && !optimized ? "Evaluate a strategy to unlock paired proof" : label}
               className={activeView === id ? "active" : ""}
             ><span className="nav-copy"><strong>{NAV_LABELS[id]}</strong></span></button>
           ))}
@@ -271,22 +317,23 @@ export default function App() {
       </header>
 
       <main className="lab-layout">
-        <aside className="model-rail">
+        <aside id="system-inputs" className="model-rail">
           <div className="rail-studio">
             <img src={logoUrl} alt="" aria-hidden="true" />
-            <span><small>GROUNDED MODEL</small><strong>Scenario studio</strong></span>
-            <em><i /> Live</em>
+            <span><small>YOUR MODEL</small><strong>Scenario studio</strong></span>
+            <em><i /> {isRunning ? "Busy" : "Editable"}</em>
           </div>
-          <div className="rail-clean-heading"><small>MICROGRID INPUTS</small><h2>System configuration</h2><p>Every value directly changes the simulation.</p></div>
+          <div className="rail-clean-heading"><small>CONFIGURATION</small><h2>Build your scenario.</h2><p>Set the assets and operating assumptions to test.</p></div>
           <div className="rail-summary" aria-label="Microgrid configuration summary">
             <span><small>PV ARRAY</small><strong>{config.solarCapacityKW.toLocaleString()}</strong><em>kW</em></span>
             <span><small>STORAGE</small><strong>{config.batteryCapacityKWh.toLocaleString()}</strong><em>kWh</em></span>
             <span><small>CRITICAL</small><strong>{config.hospitalKW.toLocaleString()}</strong><em>kW</em></span>
           </div>
-          <div className="panel-surface twin-controls"><TwinPanel config={config} setConfigField={setConfigField} locationId={locationId} /></div>
+          <fieldset className="panel-surface twin-controls" disabled={isRunning}><legend className="sr-only">Microgrid inputs</legend><TwinPanel config={config} setConfigField={setConfigField} locationId={locationId} /></fieldset>
+          <div className="studio-rail-footer"><span>{isRunning ? "Inputs locked while this run completes" : "Inputs stay local until you run an analysis"}</span><button disabled={isRunning} onClick={() => setConfig({ ...DEFAULT_CONFIG })}>Reset inputs</button></div>
         </aside>
 
-        <section className="lab-content">
+        <section id="analysis-workspace" className="lab-content">
           <section className="workspace-overview">
             <div className="workspace-overview-title"><span>{workspaces.find((item) => item.id === activeView)?.index}</span><div><h1>{workspaces.find((item) => item.id === activeView)?.label}</h1><p>{WORKSPACE_META[activeView].description}</p></div></div>
             <div className="workspace-overview-context">
@@ -295,15 +342,15 @@ export default function App() {
               <span><small>MODEL HORIZON</small><strong>72 hours · Δ15m</strong></span>
             </div>
           </section>
-
+          <a className="config-link" href="#system-inputs">Edit system inputs ↗</a>
           <div className="workspace-toolbar">
             <div className="toolbar-label"><small>RUN CONFIGURATION</small><strong>{PRESETS[preset].label} · {scenarioCount.toLocaleString()} futures</strong></div>
-            <div className="run-controls">
+            <fieldset className="run-controls" disabled={isRunning}><legend className="sr-only">Run configuration</legend>
               <label><span>Region</span><select value={locationId} onChange={(e) => setLocationId(e.target.value as LocationId)}>{Object.values(LOCATIONS).map((l) => <option key={l.id} value={l.id}>{l.label}</option>)}</select></label>
               <label><span>Population</span><select value={scenarioCount} onChange={(e) => setScenarioCount(Number(e.target.value))}>{[500, 1000, 2000, 5000, 10000].map((n) => <option key={n} value={n}>{n.toLocaleString()} futures</option>)}</select></label>
               <label><span>Site data</span><select value={siteDataProfileId} onChange={(e) => setSiteDataProfileId(e.target.value)}><option value="representative-model">Representative model</option>{siteDataProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.label}</option>)}</select></label>
-              <button onClick={runSimulation} disabled={isFoundingWorld || isSimulating || isRevealingEvidence} className="run-button"><span className="run-icon">{isRunning ? <i /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>}</span><div><small>{isFoundingWorld ? "FOUNDING WORLD" : isRevealingEvidence ? "COMMITTING EVIDENCE" : isSimulating ? "CALCULATING" : "RUN SIMULATION"}</small>{isFoundingWorld ? "Assembling your field lab…" : isRevealingEvidence ? "Planting verified result…" : isSimulating ? "Exploring futures…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
-            </div>
+              <button onClick={runSimulation} disabled={cannotRun} className="run-button"><span className="run-icon">{isRunning ? <i /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>}</span><div><small>{isFoundingWorld ? "FOUNDING WORLD" : isRevealingEvidence ? "COMMITTING EVIDENCE" : isRunning ? "ANALYSIS IN PROGRESS" : "RUN SIMULATION"}</small>{isFoundingWorld ? "Assembling your field lab…" : isRevealingEvidence ? "Planting verified result…" : isRunning ? "Working on your analysis…" : !connected ? "Starting engine…" : !dataReady ? "Loading data source…" : `Explore ${scenarioCount.toLocaleString()} futures`}</div></button>
+            </fieldset>
           </div>
           <nav className="proof-path" aria-label="Judge proof path">
             <span><strong>Analysis path</strong></span>
@@ -313,11 +360,17 @@ export default function App() {
             <button onClick={() => setActiveView("compare")} disabled={!optimized} className={optimized ? "done" : ""}><b>4</b><span>Prove</span></button>
             <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit</span></button>
           </nav>
-          {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Check that the simulation server is running, then retry—the previous verified evidence was not overwritten.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
+          {engineError && <div className="studio-snapshot-notice" role="alert"><div><strong>Simulation engine needs attention</strong><p>{engineError}</p><p>Reloading clears the open report; export any completed evidence first.</p></div><button onClick={() => window.location.reload()}>Reload workspace</button></div>}
+          {engineNotice && <div className="studio-snapshot-notice" role="status"><div><strong>Saved world notice</strong><p>{engineNotice}</p></div></div>}
+          {configIssues.length > 0 && <div className="studio-input-errors" role="alert"><strong>Check these inputs before running</strong><ul>{configIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
+          {baseline && !baselineIsCurrent && <div className="studio-snapshot-notice" role="status"><div><strong>Your inputs have changed.</strong><p>The report below is preserved from the earlier run. Changed: {inputChanges.join(", ")}. Run again before evaluating a strategy for these inputs.</p></div><button disabled={isRunning} onClick={restoreRunInputs}>Restore run inputs</button></div>}
+          {activeView === "matrix" && climateSweep && !matrixIsCurrent && <div className="studio-snapshot-notice" role="status"><div><strong>This matrix belongs to earlier inputs.</strong><p>Rebuild it to compare the current system across all five hazards.</p></div><button disabled={cannotRun} onClick={runAllHazards}>Rebuild matrix</button></div>}
+          {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Your last completed report has been preserved. Check the inputs and retry; if the engine stopped, reload the workspace.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
           {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span><em>{runElapsed.toFixed(1)}s</em></div>}
 
           {activeView === "overview" && (
             <>
+            <DecisionWorkspace baseline={baseline} optimized={optimized} stale={!!baseline && !baselineIsCurrent} busy={cannotRun} targetPct={riskTargetPct} onTargetChange={setRiskTargetPct} onRun={runSimulation} onRisk={() => setActiveView("risk")} onStrategy={() => setActiveView("optimizer")} onProof={() => setActiveView("compare")} onMethod={() => setActiveView("method")} />
             <div className="overview-grid">
               <section className="world-card">
                 <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div><span className="verified-pill">Interactive digital twin</span></div>
@@ -337,7 +390,7 @@ export default function App() {
                 <div className="world-caption"><p>Drag to explore · scroll to zoom · select an object to inspect proof</p>{world && <div><span><b>{world.trees.length}</b> verified trees</span><span><b>{world.buildings.length}</b> resilience buildings</span><span><b>{world.totalRuns}</b> completed runs</span></div>}</div>
               </section>
               <aside className="hazard-column">
-                <section className="hazard-card"><div className="card-heading"><div><small>02 · CLIMATE PRESSURE</small><h3>Choose a hazard</h3></div></div><div className="panel-surface"><StressPanel preset={preset} setPreset={setPreset} isSweeping={isSweeping} runClimateSweep={runAllHazards} /></div></section>
+                <section className="hazard-card"><div className="card-heading"><div><small>CLIMATE PRESSURE</small><h3>Choose a hazard</h3></div></div><fieldset className="panel-surface" disabled={isRunning}><legend className="sr-only">Hazard controls</legend><StressPanel preset={preset} setPreset={setPreset} isSweeping={isSweeping} disabled={cannotRun} runClimateSweep={runAllHazards} /></fieldset></section>
                 <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><small>EVIDENCE, NOT PROMISES</small><p>Evidence trees appear after completed, reproducible simulations. The surrounding forest is illustrative.</p></div></section>
               </aside>
             </div>
@@ -353,9 +406,9 @@ export default function App() {
           <Suspense fallback={<WorkspaceFallback />}>
             {activeView === "matrix" && climateSweep && <section className="analysis-card"><div className="analysis-heading"><div><small>MULTI-HAZARD VALIDATION</small><h3>Climate resilience matrix</h3></div><p>Five climate regimes. Identical seeds. One honest worst-case score.</p></div><div className="panel-surface analysis-body"><ClimateMatrixPanel sweep={climateSweep} /></div></section>}
             {activeView === "risk" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>CAUSAL FORENSICS</small><h3>Where the system breaks</h3></div><button className="next-step" onClick={() => setActiveView("optimizer")}>Find a resilient strategy →</button></div><div className="panel-surface analysis-body"><RiskPanel baseline={baseline} selectedFailureSeed={selectedFailureSeed} setSelectedFailureSeed={setSelectedFailureSeed} /></div></section>}
-            {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>245 strategies searched across five hazards, then validated on three disjoint holdouts and four assumption shocks.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} runOptimizer={runOptimizer} /></div></section>}
-            {activeView === "compare" && baseline && optimized && <section className="analysis-card"><div className="analysis-heading"><div><small>COUNTERFACTUAL PROOF</small><h3>Same future. Better outcome.</h3></div><p>Only the intervention changes between these two calibrated worlds.</p></div><div className="panel-surface analysis-body"><ComparePanel baseline={baseline} optimized={optimized} /></div></section>}
-            {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={calibration} siteData={baseline?.siteData ?? activeSiteData} locationLabel={LOCATIONS[locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} /></div></section>}
+            {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>245 strategies searched across five hazards, then validated on three disjoint holdouts and four assumption shocks.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} disabled={isRunning || !baselineIsCurrent || !connected} runOptimizer={runOptimizer} /></div></section>}
+            {activeView === "compare" && baseline && optimized && <section className="analysis-card"><div className="analysis-heading"><div><small>COUNTERFACTUAL PROOF</small><h3>Same future. Two strategies.</h3></div><p>Only the intervention changes between these two calibrated worlds.</p></div><div className="panel-surface analysis-body"><ComparePanel baseline={baseline} optimized={optimized} /></div></section>}
+            {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={baseline ? baseline.calibration ?? null : calibration} siteData={baseline ? baseline.siteData ?? null : activeSiteData} locationLabel={LOCATIONS[baseline?.location ?? locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} /></div></section>}
           </Suspense>
         </section>
       </main>

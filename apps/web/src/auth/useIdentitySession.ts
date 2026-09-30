@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { bootstrapCloudIdentity, cloudClient, cloudIdentityConfigured, signInWithGitHub, signOutCloud } from "./cloudIdentity";
 import { getActiveIdentity, signOutLocalAccount, type IdentityProfile } from "./localIdentity";
+import { SessionBootstrap } from "./sessionBootstrap";
 
 export function useIdentitySession() {
   const [identity, setIdentity] = useState<IdentityProfile | null>(() => cloudIdentityConfigured ? null : getActiveIdentity());
@@ -12,39 +13,34 @@ export function useIdentitySession() {
     const client = cloudClient();
     if (!client) return;
     let active = true;
-
-    const applyUser = async (user: Parameters<typeof bootstrapCloudIdentity>[0] | null) => {
-      try {
-        const next = user ? await bootstrapCloudIdentity(user) : null;
-        if (active) {
-          setIdentity(next);
-          setError(null);
-          setReady(true);
-        }
-      } catch (reason) {
-        if (active) {
-          setIdentity(null);
-          setError(reason instanceof Error ? reason.message : "Cloud identity could not be initialized.");
-          setReady(true);
-        }
-      }
-    };
+    let authEventSeen = false;
+    const session = new SessionBootstrap(bootstrapCloudIdentity, (next, nextError) => {
+      setIdentity(next);
+      setError(nextError);
+      setReady(true);
+    });
 
     void client.auth.getSession().then(({ data, error: sessionError }) => {
       if (sessionError) throw sessionError;
-      return applyUser(data.session?.user ?? null);
+      // An auth event is newer than the initial session lookup. A delayed
+      // lookup must not restore the previous account after sign-out/switch.
+      if (!authEventSeen) return session.apply(data.session?.user ?? null);
     }).catch((reason) => {
-      if (active) {
+      if (active && !authEventSeen) {
         setError(reason instanceof Error ? reason.message : "Cloud session could not be read.");
         setReady(true);
       }
     });
 
-    const { data } = client.auth.onAuthStateChange((_event, session) => {
-      window.setTimeout(() => { void applyUser(session?.user ?? null); }, 0);
+    const { data } = client.auth.onAuthStateChange((_event, nextSession) => {
+      authEventSeen = true;
+      // Defer Supabase I/O outside its auth callback. Same-account refreshes
+      // are deduplicated, preserving newer local/in-memory world progress.
+      window.setTimeout(() => { if (active) void session.apply(nextSession?.user ?? null); }, 0);
     });
     return () => {
       active = false;
+      session.dispose();
       data.subscription.unsubscribe();
     };
   }, []);

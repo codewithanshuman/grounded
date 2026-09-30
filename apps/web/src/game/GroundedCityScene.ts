@@ -15,6 +15,8 @@ import { bakeTextures, WORLD_TEXTURES } from "./textures";
 import workerUrl from "../../../../assets/world-worker.png";
 import architectUrl from "../../../../assets/world-architect.png";
 import runnerUrl from "../../../../assets/world-runner.png";
+import { RailSystem, type RailStatus } from "./rail/RailSystem";
+import { inRailCorridor } from "./rail/railModel";
 
 const CITY_WIDTH = CITY_SIZE.width;
 const CITY_HEIGHT = CITY_SIZE.height;
@@ -83,7 +85,7 @@ for (const y of [1,5,7,11,25,29,31]) for (const x of [1,5,13,17,19,23,25,29,31,3
   NEIGHBOURHOODS.push(cityBuilding(`neighbourhood/${x}/${y}`, "community", ["HTML","CSS","TypeScript","JavaScript"][index%4]!, index%5===0 ? 4100 : 600+index%3*650,x,y));
 }
 
-export type CityView = "city" | "forest" | "bridge" | "landmarks" | "energy" | "world";
+export type CityView = "city" | "forest" | "bridge" | "landmarks" | "energy" | "rail" | "world";
 
 export class GroundedCityScene extends WorldScene {
   private inspectHandler: ((inspection: ForestInspection) => void) | undefined;
@@ -96,6 +98,8 @@ export class GroundedCityScene extends WorldScene {
   private hasHydratedWorld = false;
   private reserveBuilt = false;
   private currentView: CityView = "city";
+  private railway?: RailSystem;
+  private railStatusHandler?: (status: RailStatus) => void;
 
   constructor() {
     super();
@@ -114,12 +118,17 @@ export class GroundedCityScene extends WorldScene {
       this.forestReserveObjects.forEach(object => this.tweens.killTweensOf(object));
       this.forestReserveObjects = [];
       this.reserveBuilt = false;
+      this.railway = undefined;
     });
   }
 
   setInspectHandler(handler: ((inspection: ForestInspection) => void) | undefined): void {
     this.inspectHandler = handler;
   }
+
+  setRailStatusHandler(handler?: (status: RailStatus) => void): void { this.railStatusHandler = handler; this.railway?.setStatusHandler(handler); }
+  setRailPaused(paused: boolean): void { this.railway?.setPaused(paused); }
+  setRailSpeed(speed: number): void { this.railway?.setSpeed(speed); }
 
   setGroundedWorld(world: WorldState): void {
     this.latestWorld = world;
@@ -132,6 +141,10 @@ export class GroundedCityScene extends WorldScene {
       background: "#163e2c",
     });
     this.drawForestReserve();
+    if (!this.railway) {
+      this.railway = new RailSystem(this, (title, evidence) => this.inspectHandler?.(contextInspection(title, evidence)));
+      this.railway.setStatusHandler(this.railStatusHandler);
+    }
     this.drawSignatureFacilities();
     this.clearLandmarkProps();
     this.expandCameraBounds();
@@ -162,7 +175,7 @@ export class GroundedCityScene extends WorldScene {
       const {x,y}=projection.unproject(prop.x,prop.y-TILE_ANCHOR_Y);
       const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
       const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
-      if (insideLandmark(x,y)||approach||energy) prop.setVisible(false);
+      if (insideLandmark(x,y)||approach||energy||inRailCorridor(x,y)) prop.setVisible(false);
     }
   }
 
@@ -189,7 +202,8 @@ export class GroundedCityScene extends WorldScene {
     else if(view==="bridge") corners=[[RESERVE.bridgeStart-3,7],[0,7],[0,17],[RESERVE.bridgeStart-3,17]];
     else if(view==="landmarks") corners=[[28,17],[43,17],[43,32],[28,32]];
     else if(view==="energy") corners=[[37,-1],[49,-1],[49,35],[37,35]];
-    else if(view==="world") corners=[[-45,-3],[49,-5],[49,43],[-15,49],[-45,27]];
+    else if(view==="rail") corners=[[-16,-39],[14,-39],[14,35],[-10,35]];
+    else if(view==="world") corners=[[-45,-3],[-16,-39],[14,-39],[59,-5],[59,43],[-15,49],[-45,27]];
     else corners=[[-6,-4],[50,-4],[50,40],[-8,45]];
     const points=corners.map(([x,y])=>projection.project(x,y));
     const left=Math.min(...points.map(p=>p.x))-100, right=Math.max(...points.map(p=>p.x))+100;

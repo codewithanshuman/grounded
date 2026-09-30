@@ -1,7 +1,7 @@
 import { z } from "zod";
 
-export * from "./lattice";
-import { BLOCK, nearestLatticeSafeCentre } from "./lattice";
+export * from "./lattice.js";
+import { BLOCK, nearestLatticeSafeCentre } from "./lattice.js";
 
 export const PlotSchema = z.object({
   x: z.number().int().nonnegative(),

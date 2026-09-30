@@ -5,10 +5,12 @@ import {
 } from "recharts";
 import type { ClimateSweepResult, RunSummary } from "@verdant/protocol";
 import {
-  LOCATIONS, PRESETS, PRESET_ORDER, buildNarrative, explainFailure, fmtHour, locationFromCalibration, simulateScenario, wilsonInterval, DT,
+  LOCATIONS, PRESETS, PRESET_ORDER, buildNarrative, explainFailure, fmtHour, locationFromCalibration, locationWithSiteData, simulateScenario, wilsonInterval, DT,
 } from "@verdant/sim";
 import { StatBlock, RiskSegmentBar, TimelineList } from "./Widgets";
 import type { OptimizeResponse } from "../ws/client";
+import { replayLocation } from "../lib/runReplay";
+import { assessRun } from "../lib/analysisContext";
 
 /* ----------------------------- Climate Matrix ------------------------------ */
 export function ClimateMatrixPanel({ sweep }: { sweep: ClimateSweepResult }) {
@@ -57,7 +59,7 @@ export function ClimateMatrixPanel({ sweep }: { sweep: ClimateSweepResult }) {
 export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSeed }: {
   baseline: RunSummary; selectedFailureSeed: number | null; setSelectedFailureSeed: (s: number) => void;
 }) {
-  const location = locationFromCalibration(LOCATIONS[baseline.location], baseline.calibration);
+  const location = replayLocation(baseline);
   const selected = selectedFailureSeed != null
     ? baseline.failures.find((f) => f.seed === selectedFailureSeed) ?? baseline.failures[0]
     : baseline.failures[0];
@@ -77,7 +79,7 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
   }, [baseline.causeCounts]);
   const criticalPct = baseline.n ? (baseline.counts.critical / baseline.n) * 100 : 0;
   const confidence = wilsonInterval(baseline.counts.critical, baseline.n);
-  const earliestLoss = baseline.failures[0] ? fmtHour(baseline.failures[0].failStep * DT) : "None";
+  const earliestLoss = baseline.failures.length ? fmtHour(Math.min(...baseline.failures.map((failure) => failure.failStep)) * DT) : "None";
   const surrogateCoefficientMax = Math.max(0.001, ...(baseline.surrogate?.coefficients.map((item) => Math.abs(item.coefficient)) ?? []));
 
   return (
@@ -85,7 +87,7 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
       <div className="grid grid-cols-4 gap-2 mb-3">
         <StatBlock label="Critical risk" value={`${criticalPct.toFixed(1)}%`} sub={`${baseline.counts.critical.toLocaleString()} failed futures`} color="#bd5e4c" />
         <StatBlock label="95% confidence" value={`${confidence.lowPct}–${confidence.highPct}%`} sub="Wilson score interval" color="#8b6948" />
-        <StatBlock label="Earliest loss" value={earliestLoss} sub="first critical seed" color="#b46c3b" />
+        <StatBlock label="Earliest retained loss" value={earliestLoss} sub="among retained failure traces" color="#b46c3b" />
         <StatBlock label="Sample" value={baseline.n.toLocaleString()} sub="deterministic futures" color="#3f6b3e" />
       </div>
       <RiskSegmentBar counts={baseline.counts} total={baseline.n} />
@@ -226,8 +228,8 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
 }
 
 /* --------------------------------- Optimizer -------------------------------- */
-export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer }: {
-  baseline: RunSummary; optimized: OptimizeResponse | null; isOptimizing: boolean; runOptimizer: () => void;
+export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer, disabled = false }: {
+  baseline: RunSummary; optimized: OptimizeResponse | null; isOptimizing: boolean; runOptimizer: () => void; disabled?: boolean;
 }) {
   const improvementPct = optimized && baseline.counts.critical > 0
     ? Math.round((1 - optimized.result.counts.critical / baseline.counts.critical) * 100)
@@ -238,7 +240,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
       <p className="text-[11px] text-slate-500 mb-2">Searches battery reserve, EV-charging delay, and pre-cooling start on an independent 300-future cohort, then validates the winner against the original {baseline.n.toLocaleString()} unseen baseline futures.</p>
       <button
         onClick={runOptimizer}
-        disabled={isOptimizing}
+        disabled={disabled || isOptimizing}
         className="w-full flex items-center justify-center gap-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-medium text-[12px] px-3 py-1.5 rounded-md mb-3"
       >
         {isOptimizing ? "Searching\u2026" : "Run optimizer"}
@@ -268,8 +270,8 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             </div>
           </div>
           <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-4 text-center">
-            <div className="font-mono font-bold text-3xl text-emerald-300">{improvementPct}%</div>
-            <div className="text-[11px] text-slate-400 mt-1">of critical futures eliminated — {baseline.counts.critical.toLocaleString()} → {optimized.result.counts.critical.toLocaleString()}</div>
+            <div className="font-mono font-bold text-3xl text-emerald-300">{baseline.counts.critical > 0 ? `${improvementPct}%` : optimized.result.counts.critical > 0 ? "Regression" : "No observed failures"}</div>
+            <div className="text-[11px] text-slate-400 mt-1">{optimized.result.counts.critical > baseline.counts.critical ? "Critical failures increased; review the policy" : optimized.result.counts.critical === baseline.counts.critical ? "No change in observed critical failures" : "Reduction in observed critical failures"} — {baseline.counts.critical.toLocaleString()} → {optimized.result.counts.critical.toLocaleString()}</div>
           </div>
           <div className="seasonal-backtest">
             <div><small>HISTORICAL CLIMATE REPLAY</small><strong>{optimized.historicalBacktest.passedPeriods}/{optimized.historicalBacktest.periods} observed climate stress periods passed without critical failure</strong><p>{optimized.historicalBacktest.futures} paired futures · {optimized.historicalBacktest.label}.</p></div>
@@ -293,7 +295,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             </section>
           </section>
           <section className="benchmark-table">
-            <div className="mini-heading"><div><small>ABLATION BENCHMARK</small><strong>Why the combined policy wins</strong></div><span>same unseen cohort</span></div>
+            <div className="mini-heading"><div><small>ABLATION BENCHMARK</small><strong>How the combined policy compares</strong></div><span>same unseen cohort</span></div>
             <div className="benchmark-head"><span>Policy</span><span>Critical</span><span>Unserved</span><span>Cost</span><span>Carbon</span></div>
             {optimized.validation.benchmarks.map((item) => <div className={item.label === "Grounded policy" ? "recommended" : ""} key={item.label}><span>{item.label}</span><b>{item.criticalPct.toFixed(1)}%</b><b>{item.meanUnservedKWh.toFixed(0)} kWh</b><b>${item.meanOperationalCost.toFixed(0)}</b><b>{item.meanCarbonKg.toFixed(0)} kg</b></div>)}
           </section>
@@ -327,7 +329,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
 
 /* -------------------------------- Compare Worlds ---------------------------- */
 export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; optimized: OptimizeResponse }) {
-  const location = locationFromCalibration(LOCATIONS[baseline.location], baseline.calibration);
+  const location = replayLocation(baseline);
   const failure = baseline.failures[0];
 
   const worldA = useMemo(() => failure ? simulateScenario(failure.seed, location, baseline.preset, baseline.config, baseline.intervention, true) : null, [failure, location, baseline]);
@@ -346,7 +348,7 @@ export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; op
     }
     return rows;
   }, [worldA, worldB]);
-  const avoidedCritical = Math.max(0, baseline.counts.critical - optimized.result.counts.critical);
+  const avoidedCritical = baseline.counts.critical - optimized.result.counts.critical;
   const reductionPct = baseline.counts.critical > 0 ? Math.round((avoidedCritical / baseline.counts.critical) * 100) : 0;
   const beforeRiskPct = baseline.n ? (baseline.counts.critical / baseline.n) * 100 : 0;
   const afterRiskPct = optimized.result.n ? (optimized.result.counts.critical / optimized.result.n) * 100 : 0;
@@ -355,20 +357,21 @@ export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; op
   const carbonDelta = (optimized.result.metrics?.meanCarbonKg ?? 0) - (baseline.metrics?.meanCarbonKg ?? 0);
   const pairedPrevented = optimized.validation.cohorts.reduce((sum, cohort) => sum + cohort.preventedFailures, 0);
   const pairedIntroduced = optimized.validation.cohorts.reduce((sum, cohort) => sum + cohort.introducedFailures, 0);
-
-  if (!failure || !worldA || !worldB) {
-    return <div className="w-96 text-[12px] text-slate-500">No baseline failure to compare — this configuration held.</div>;
-  }
+  const checksPassed = optimized.validation.recommendationStable && assessRun(baseline, 100).audited && assessRun(optimized.result, 100).audited;
+  const comparisonTitle = avoidedCritical > 0 ? `${reductionPct}% fewer observed critical failures`
+    : avoidedCritical < 0 ? `${Math.abs(avoidedCritical).toLocaleString()} additional critical failures — review required`
+    : baseline.counts.critical === 0 ? "No critical failures observed in either sample" : "No change in observed critical failures";
 
   return (
     <div className="w-[660px]">
-      <div className="proof-sequence"><span><b>1</b>Calibrated location</span><i>→</i><span><b>2</b>Hospital failure</span><i>→</i><span><b>3</b>Policy selected</span><i>→</i><span><b>4</b>Same future survives</span></div>
+      <div className="proof-sequence"><span><b>1</b>Calibrated location</span><i>→</i><span><b>2</b>Baseline assessed</span><i>→</i><span><b>3</b>Policy selected</span><i>→</i><span><b>4</b>{!worldB ? "Aggregate evidence compared" : worldB.failed ? "Residual failure disclosed" : "Replay avoids power loss"}</span></div>
       <div className="impact-brief">
-        <div className="impact-brief-copy"><small>90-SECOND DECISION PROOF</small><strong>{reductionPct}% of critical futures eliminated</strong><p>The policy reduced hospital power-loss risk from {beforeRiskPct.toFixed(1)}% to {afterRiskPct.toFixed(1)}% on {baseline.n.toLocaleString()} futures never used for optimizer search.</p></div>
-        <div className="impact-metrics proof-three"><span><small>FAILURES PREVENTED</small><b>{avoidedCritical.toLocaleString()}</b></span><span><small>95% RESIDUAL RISK</small><b>{afterConfidence.lowPct}–{afterConfidence.highPct}%</b></span><span><small>OBSERVED CLIMATE DAYS PASSED</small><b>{optimized.historicalBacktest.passedPeriods}/{optimized.historicalBacktest.periods}</b></span></div>
-        <div className="validation-stamp"><span>✓</span><div><b>OUT-OF-SAMPLE</b><small>VALIDATED</small></div></div>
+        <div className="impact-brief-copy"><small>90-SECOND DECISION PROOF</small><strong>{comparisonTitle}</strong><p>Observed hospital power-loss risk: {beforeRiskPct.toFixed(1)}% before and {afterRiskPct.toFixed(1)}% after on {baseline.n.toLocaleString()} paired futures never used for optimizer search. Zero observed failures is not a field reliability guarantee.</p></div>
+        <div className="impact-metrics proof-three"><span><small>{avoidedCritical < 0 ? "NET ADDITIONAL FAILURES" : "NET FAILURES AVOIDED"}</small><b>{Math.abs(avoidedCritical).toLocaleString()}</b></span><span><small>95% RESIDUAL RISK</small><b>{afterConfidence.lowPct}–{afterConfidence.highPct}%</b></span><span><small>CLIMATE REPLAY PERIODS PASSED</small><b>{optimized.historicalBacktest.passedPeriods}/{optimized.historicalBacktest.periods}</b></span></div>
+        <div className="validation-stamp"><span>{checksPassed ? "✓" : "!"}</span><div><b>OUT-OF-SAMPLE</b><small>{checksPassed ? "CHECKS PASSED" : "REVIEW REQUIRED"}</small></div></div>
       </div>
-      <div className="proof-audit-strip"><span><small>COST / FUTURE</small><b>{costDelta >= 0 ? "+" : "−"}${Math.abs(costDelta).toFixed(0)}</b></span><span><small>CARBON / FUTURE</small><b>{carbonDelta >= 0 ? "+" : "−"}{Math.abs(carbonDelta).toFixed(0)} kg</b></span><span><small>PAIRED HOLDOUTS</small><b>{pairedPrevented} saved · {pairedIntroduced} introduced</b></span><span><small>RUN ID</small><code>{optimized.result.manifest?.runFingerprint ?? optimized.result.runId.slice(0, 12)}</code></span><span><small>INTEGRITY</small><b>{optimized.result.audit?.status ?? "PASS"}</b></span></div>
+      <div className="proof-audit-strip"><span><small>COST / FUTURE</small><b>{costDelta >= 0 ? "+" : "−"}${Math.abs(costDelta).toFixed(0)}</b></span><span><small>CARBON / FUTURE</small><b>{carbonDelta >= 0 ? "+" : "−"}{Math.abs(carbonDelta).toFixed(0)} kg</b></span><span><small>PAIRED HOLDOUTS</small><b>{pairedPrevented} saved · {pairedIntroduced} introduced</b></span><span><small>RUN ID</small><code>{optimized.result.manifest?.runFingerprint ?? optimized.result.runId.slice(0, 12)}</code></span><span><small>INTEGRITY</small><b>{optimized.result.audit?.status ?? "NOT AVAILABLE"}</b></span></div>
+      {worldA && worldB ? <>
       <div className="grid grid-cols-2 gap-3 mb-3">
         <div className="bg-red-500/5 border border-red-500/25 rounded-lg p-3">
           <h3 className="text-[11px] font-medium text-red-300 mb-2">World A — current plan</h3>
@@ -395,6 +398,7 @@ export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; op
           </LineChart>
         </ResponsiveContainer>
       </div>
+      </> : <div className="rounded-lg border border-slate-200 p-4 text-sm text-slate-600">No retained baseline failure trace is available for a paired timeline. The aggregate comparison, sampling uncertainty and independent holdout results above still apply.</div>}
     </div>
   );
 }

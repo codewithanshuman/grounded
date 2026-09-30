@@ -1,7 +1,9 @@
 /// <reference lib="webworker" />
 
 import type { ClimateCalibration, GrowthEvent, LocationId, MicrogridConfig, PresetId, RunSummary, SiteDataProfile, WorldState } from "@verdant/protocol";
-import { ClimateCalibration as ClimateCalibrationSchema, SiteDataProfile as SiteDataProfileSchema } from "@verdant/protocol";
+import { ClimateCalibration as ClimateCalibrationSchema, SiteDataProfile as SiteDataProfileSchema, WorldState as WorldStateSchema } from "@verdant/protocol";
+import { parseAnalysisRequest } from "./engineRequest";
+import { assessRun } from "../lib/analysisContext";
 import {
   DEFAULT_INTERVENTION, LOCATIONS, PRESET_ORDER, analyzeInterventions, analyzeSensitivity,
   locationFromCalibration, locationWithSiteData, runMonteCarlo, toRunSummary, validateIntervention,
@@ -24,7 +26,10 @@ function calibrationFor(location: LocationId): ClimateCalibration {
 }
 
 function profileFor(id: string | undefined): SiteDataProfile | undefined {
-  return id === "representative-model" ? undefined : profiles.get(id ?? measuredReference.id);
+  if (id === "representative-model") return undefined;
+  const profile = profiles.get(id ?? measuredReference.id);
+  if (!profile) throw new Error("That data profile is not available in this engine. Choose an available source and rerun.");
+  return profile;
 }
 
 function spiralCell(index: number): { gx: number; gy: number } {
@@ -39,6 +44,7 @@ function spiralCell(index: number): { gx: number; gy: number } {
 }
 
 function recordRun(summary: RunSummary): GrowthEvent[] {
+  if (!assessRun(summary, 100).audited || world.trees.some((tree) => tree.runId === summary.runId)) return [];
   const events: GrowthEvent[] = [];
   const safeRatio = (summary.counts.safe + summary.counts.moderate) / Math.max(1, summary.n);
   const species = safeRatio >= 0.97 ? "ancient" : safeRatio >= 0.85 ? "flowering" : safeRatio >= 0.6 ? "oak" : "sapling";
@@ -49,14 +55,17 @@ function recordRun(summary: RunSummary): GrowthEvent[] {
   return events;
 }
 
-function recordOptimization(before: RunSummary, after: RunSummary): GrowthEvent[] {
-  const improvementPct = before.counts.critical > 0 ? Math.round((1 - after.counts.critical / before.counts.critical) * 100) : 0;
+/** One verified milestone per baseline; rerunning the same search is not new evidence. */
+export function recordOptimization(before: RunSummary, after: RunSummary): GrowthEvent[] {
+  if (!assessRun(before, 100).audited || !assessRun(after, 100).audited || before.n !== after.n) return [];
+  const improvement = before.counts.critical > 0 ? (1 - after.counts.critical / before.counts.critical) * 100 : 0;
+  const improvementPct = Math.round(improvement);
   world = { ...world, bestImprovementPct: Math.max(world.bestImprovementPct, improvementPct) };
-  if (before.counts.critical <= 0 || improvementPct < 90) return [];
+  if (before.counts.critical <= 0 || improvement < 90 || world.buildings.some((building) => building.runId === before.runId)) return [];
   const cell = spiralCell(world.trees.length + world.buildings.length);
   const kind = after.counts.critical === 0 ? "reservoir" as const : "resilienceHall" as const;
   const milestone = after.counts.critical === 0
-    ? `Full resilience achieved: ${before.counts.critical.toLocaleString()} failures eliminated across ${after.n.toLocaleString()} futures.`
+    ? `No critical failures observed in this ${after.n.toLocaleString()}-future sample; ${before.counts.critical.toLocaleString()} baseline failures avoided. Not a field reliability guarantee.`
     : `${improvementPct}% of critical failures eliminated by the recommended intervention.`;
   const building = { id: crypto.randomUUID(), ...cell, kind, grownAt: Date.now(), runId: before.runId, milestone };
   world = { ...world, buildings: [...world.buildings, building] };
@@ -64,10 +73,7 @@ function recordOptimization(before: RunSummary, after: RunSummary): GrowthEvent[
 }
 
 function runSimulation(args: Record<string, unknown>) {
-  const location = args.location as LocationId;
-  const preset = args.preset as PresetId;
-  const config = args.config as MicrogridConfig;
-  const scenarioCount = args.scenarioCount as number;
+  const { location, preset, config, scenarioCount } = parseAnalysisRequest(args);
   const siteData = profileFor(args.siteDataProfileId as string | undefined);
   const calibration = calibrationFor(location);
   const calibrated = locationFromCalibration(locationWithSiteData(LOCATIONS[location], siteData), calibration);
@@ -80,9 +86,7 @@ function runSimulation(args: Record<string, unknown>) {
 }
 
 function runSweep(args: Record<string, unknown>) {
-  const location = args.location as LocationId;
-  const config = args.config as MicrogridConfig;
-  const scenarioCount = (args.scenarioCount as number | undefined) ?? 500;
+  const { location, config, scenarioCount } = parseAnalysisRequest(args, true);
   const siteData = profileFor(args.siteDataProfileId as string | undefined);
   const calibration = calibrationFor(location);
   const calibrated = locationFromCalibration(locationWithSiteData(LOCATIONS[location], siteData), calibration);
@@ -140,7 +144,7 @@ self.onmessage = (event: MessageEvent<RequestMessage>) => {
   const { id, op, args = {} } = event.data;
   try {
     let result: unknown;
-    if (op === "init") { world = (args.world as WorldState | undefined) ?? world; result = { world }; }
+    if (op === "init") { world = args.world ? WorldStateSchema.parse(args.world) : world; result = { world }; }
     else if (op === "simulate") result = runSimulation(args);
     else if (op === "sweep") result = runSweep(args);
     else if (op === "optimize") result = runOptimization(args);

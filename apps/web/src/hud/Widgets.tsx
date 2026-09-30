@@ -1,6 +1,7 @@
 import type { RiskBucket } from "@verdant/protocol";
 import type { NarrativeEvent } from "@verdant/sim";
 import { fmtHour } from "@verdant/sim";
+import { useId } from "react";
 
 export const BUCKET_META: Record<RiskBucket, { label: string; color: string }> = {
   safe: { label: "SAFE", color: "#34d399" },
@@ -12,18 +13,23 @@ export const BUCKET_META: Record<RiskBucket, { label: string; color: string }> =
 export function Field({
   label, value, onChange, min, max, step, unit,
 }: { label: string; value: number; onChange: (v: number) => void; min?: number; max?: number; step?: number; unit?: string }) {
+  const id = useId();
+  const invalid = !Number.isFinite(value) || (min != null && value < min) || (max != null && value > max);
   return (
     <div className="data-field">
-      <span className="data-field-label">{label}</span>
+      <label className="data-field-label" htmlFor={id}>{label}</label>
       <div className="data-field-control">
         <input
           type="number"
-          value={value}
+          id={id}
+          value={Number.isFinite(value) ? value : ""}
           min={min} max={max} step={step}
-          onChange={(e) => onChange(Number(e.target.value))}
+          aria-invalid={invalid || undefined}
+          aria-describedby={unit ? `${id}-unit` : undefined}
+          onChange={(e) => onChange(e.target.valueAsNumber)}
           className="data-field-input"
         />
-        {unit && <span className="data-field-unit">{unit}</span>}
+        {unit && <span id={`${id}-unit`} className="data-field-unit">{unit}</span>}
       </div>
     </div>
   );

@@ -264,6 +264,7 @@
   .lab-shell .analysis-body, .lab-shell .analysis-heading { padding: 18px; }
   .lab-shell .analysis-body { overflow-x: auto; }
   .lab-shell .analysis-heading h3 { font-size: 23px; }
+  .lab-shell .hazard-card .panel-surface > div { grid-template-columns: 1fr; }
   .lab-shell .evidence-bar { position: static; padding: 10px 14px; flex-wrap: wrap; gap: 5px 14px; }
   .lab-shell .config-link { display: inline-flex; margin: 0 0 15px; font-size: 12px; color: #45805b; text-decoration: underline; text-underline-offset: 4px; }
 }

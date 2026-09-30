@@ -17,6 +17,10 @@ import architectUrl from "../../../../assets/world-architect.png";
 import runnerUrl from "../../../../assets/world-runner.png";
 import { RailSystem, type RailStatus } from "./rail/RailSystem";
 import { inRailCorridor } from "./rail/railModel";
+import { addNorthernDistrict } from "./districts/NorthernDistrict";
+import { NORTHERN_MAINLAND, northernShoreline } from "./districts/expansionLayout";
+import { addNorthCityBridge } from "./districts/NorthCityBridge";
+import { onNorthCityApproach } from "./districts/northBridgeModel";
 
 const CITY_WIDTH = CITY_SIZE.width;
 const CITY_HEIGHT = CITY_SIZE.height;
@@ -85,7 +89,7 @@ for (const y of [1,5,7,11,25,29,31]) for (const x of [1,5,13,17,19,23,25,29,31,3
   NEIGHBOURHOODS.push(cityBuilding(`neighbourhood/${x}/${y}`, "community", ["HTML","CSS","TypeScript","JavaScript"][index%4]!, index%5===0 ? 4100 : 600+index%3*650,x,y));
 }
 
-export type CityView = "city" | "forest" | "bridge" | "landmarks" | "energy" | "rail" | "world";
+export type CityView = "city" | "north" | "forest" | "bridge" | "landmarks" | "energy" | "rail" | "world";
 
 export class GroundedCityScene extends WorldScene {
   private inspectHandler: ((inspection: ForestInspection) => void) | undefined;
@@ -97,6 +101,8 @@ export class GroundedCityScene extends WorldScene {
   private activity: ForestActivity = null;
   private hasHydratedWorld = false;
   private reserveBuilt = false;
+  private northBuilt = false;
+  private northernObjects: Phaser.GameObjects.GameObject[] = [];
   private currentView: CityView = "city";
   private railway?: RailSystem;
   private railStatusHandler?: (status: RailStatus) => void;
@@ -118,6 +124,9 @@ export class GroundedCityScene extends WorldScene {
       this.forestReserveObjects.forEach(object => this.tweens.killTweensOf(object));
       this.forestReserveObjects = [];
       this.reserveBuilt = false;
+      this.northernObjects.forEach(object => this.tweens.killTweensOf(object));
+      this.northernObjects = [];
+      this.northBuilt = false;
       this.railway = undefined;
     });
   }
@@ -141,6 +150,10 @@ export class GroundedCityScene extends WorldScene {
       background: "#163e2c",
     });
     this.drawForestReserve();
+    if (!this.northBuilt) {
+      this.northBuilt = true;
+      this.northernObjects.push(...addNorthernDistrict(this, (title, evidence) => this.inspectHandler?.(contextInspection(title, evidence))), ...addNorthCityBridge(this));
+    }
     if (!this.railway) {
       this.railway = new RailSystem(this, (title, evidence) => this.inspectHandler?.(contextInspection(title, evidence)));
       this.railway.setStatusHandler(this.railStatusHandler);
@@ -175,12 +188,19 @@ export class GroundedCityScene extends WorldScene {
       const {x,y}=projection.unproject(prop.x,prop.y-TILE_ANCHOR_Y);
       const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
       const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
-      if (insideLandmark(x,y)||approach||energy||inRailCorridor(x,y)) prop.setVisible(false);
+      if (insideLandmark(x,y)||approach||energy||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5)) prop.setVisible(false);
     }
   }
 
   private expandCameraBounds(): void {
-    this.cameras.main.setBounds(-4700,-2400,9500,6500);
+    // Include the new coastline in pan bounds instead of clipping it to the old city.
+    const north=NORTHERN_MAINLAND;
+    const corners=[[-48,-8],[-48,49],[78,49],[north.centerX-north.radiusX,north.centerY-north.radiusY],
+      [north.centerX+north.radiusX,north.centerY-north.radiusY],[north.centerX+north.radiusX,north.southShore]];
+    const points=corners.map(([x,y])=>projection.project(x!,y!));
+    const left=Math.min(...points.map(p=>p.x))-1200, right=Math.max(...points.map(p=>p.x))+1200;
+    const top=Math.min(...points.map(p=>p.y))-1200, bottom=Math.max(...points.map(p=>p.y))+1200;
+    this.cameras.main.setBounds(left,top,right-left,bottom-top);
   }
 
   override fitCamera(): void {
@@ -199,23 +219,28 @@ export class GroundedCityScene extends WorldScene {
     const camera=this.cameras.main;
     let corners: Array<readonly [number,number]>;
     if(view==="forest") corners=[[-45,-3],[-21,-3],[-21,27],[-45,27]];
+    else if(view==="north") corners=northernShoreline().map(point=>[point.x,point.y] as const);
     else if(view==="bridge") corners=[[RESERVE.bridgeStart-3,7],[0,7],[0,17],[RESERVE.bridgeStart-3,17]];
     else if(view==="landmarks") corners=[[28,17],[43,17],[43,32],[28,32]];
     else if(view==="energy") corners=[[37,-1],[49,-1],[49,35],[37,35]];
-    else if(view==="rail") corners=[[-16,-39],[14,-39],[14,35],[-10,35]];
-    else if(view==="world") corners=[[-45,-3],[-16,-39],[14,-39],[59,-5],[59,43],[-15,49],[-45,27]];
+    else if(view==="rail") corners=[[11,-94],[33,-94],[33,-27],[11,-27]];
+    else if(view==="world") corners=[...northernShoreline().map(point=>[point.x,point.y] as const),[-45,-3],[74,43],[-15,49],[-45,27]];
     else corners=[[-6,-4],[50,-4],[50,40],[-8,45]];
     const points=corners.map(([x,y])=>projection.project(x,y));
     const left=Math.min(...points.map(p=>p.x))-100, right=Math.max(...points.map(p=>p.x))+100;
     const top=Math.min(...points.map(p=>p.y))-300, bottom=Math.max(...points.map(p=>p.y))+70;
-    const zoom=Phaser.Math.Clamp(Math.min((camera.width-40)/(right-left),(camera.height-40)/(bottom-top)),MIN_ZOOM,1);
+    // Fit below the actual navigation height, not behind it on narrow displays.
+    const topInset=camera.width<420?155:camera.width<760?112:72;
+    const bottomInset=view==="rail"?78:20;
+    const zoom=Phaser.Math.Clamp(Math.min((camera.width-40)/(right-left),(camera.height-topInset-bottomInset)/(bottom-top)),MIN_ZOOM,1);
+    const centerY=(top+bottom)/2-(topInset-bottomInset)/(2*zoom);
     if(animate && !prefersReducedMotion()){
       this.cameraController.noteCameraInput();
-      this.cameraController.moveCameraTo((left+right)/2,(top+bottom)/2,zoom);
+      this.cameraController.moveCameraTo((left+right)/2,centerY,zoom);
     } else {
       this.cameraController.focusTween?.stop();
       this.cameraController.zoomTarget=zoom;
-      camera.setZoom(zoom).centerOn((left+right)/2,(top+bottom)/2);
+      camera.setZoom(zoom).centerOn((left+right)/2,centerY);
     }
   }
 
@@ -370,7 +395,7 @@ export class GroundedCityScene extends WorldScene {
     const proofRing = this.add.ellipse(sprite.x, sprite.y - 3, 20, 8)
       .setStrokeStyle(2, 0xb7df72, 0.9)
       .setDepth(sprite.depth + 2);
-    const label = this.add.text(sprite.x, sprite.y - 92, "RUN VERIFIED\nEVIDENCE TREE PLANTED", {
+    const label = this.add.text(sprite.x, sprite.y - 92, "Simulation recorded", {
       fontFamily: "IBM Plex Mono, monospace",
       fontSize: "7px",
       color: "#f6f7ec",

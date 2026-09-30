@@ -3,6 +3,7 @@ import { ClimateCalibration, ClimateSweepResult, RunSummary, SiteDataProfile, Wo
 import { DEFAULT_CONFIG, simulateScenario } from "@verdant/sim";
 import type { OptimizeResponse } from "../src/ws/client";
 import { replayLocation } from "../src/lib/runReplay";
+import { assessDecisionReadiness } from "../src/lib/decisionReadiness";
 
 /** Real dispatch boundary and real simulation/search engines; only worker transport is in-process. */
 describe("Static worker complete analysis workflow", () => {
@@ -73,6 +74,10 @@ describe("Static worker complete analysis workflow", () => {
     expect(first.validation.cohorts.every((cohort) => cohort.sampleSize === 200 && cohort.seedOffset >= 10_500)).toBe(true);
     expect(first.validation.jointStressEnvelope.evaluatedCells).toBe(81);
     expect(first.validation.decisionStability.cohorts).toHaveLength(3);
+    const planning=assessDecisionReadiness(baseline,first,1);
+    expect(planning.evidenceValid).toBe(true);
+    expect(planning.withinTarget).toBe(false); // Independent 200-future holdouts cannot resolve a 1% bound.
+    expect(planning.holdouts).toHaveLength(3);
     expect(first.historicalBacktest.periods).toBeGreaterThan(0);
     expect(first.historicalBacktest.futures).toBe(first.historicalBacktest.periods * 24);
     expect(first.world.totalRuns).toBe(1);

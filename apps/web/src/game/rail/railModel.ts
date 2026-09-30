@@ -1,11 +1,13 @@
-/** A deterministic operating timetable; independent of the energy evidence model. */
-export const RAIL = { x: -3, elevation: 64, laneOffset: .37, carSpacing: 1.03, trackStart: -30.5, trackEnd: 33.5 };
-export const RESEARCH_DISTRICT = { cx: -1, cy: -29, rx: 14, ry: 9 };
+import { insideNorthRoad } from "../districts/expansionLayout";
+/** A dedicated northern-mainland metro, independent of the energy evidence model. */
+export const RAIL = { x: 18, elevation: 64, laneOffset: .37, carSpacing: 1.03, trackStart: -89, trackEnd: -33 };
+/** Clear land for the entire station stair, shelter and train envelope, not just the rails. */
+export const RAIL_RESERVATION = { minX: 13, maxX: 23, minY: -91, maxY: -32 };
 export const RAIL_STATIONS = [
-  { id: "research", name: "Research Park", y: -28 },
-  { id: "city", name: "City Gate", y: 0 },
-  { id: "reserve", name: "Reserve Link", y: 12 },
-  { id: "airport", name: "Airport", y: 31 },
+  { id: "campus", name: "Climate Campus", y: -86 },
+  { id: "research", name: "Research Park", y: -70 },
+  { id: "garden", name: "Garden Quarter", y: -54 },
+  { id: "interchange", name: "City Interchange", y: -36 },
 ] as const;
 export interface RailPose { y: number; direction: 1 | -1; phase: "DWELL" | "RUNNING"; station: string; nextStation: string; secondsRemaining: number; }
 const DWELL_MS = 5_000;
@@ -33,8 +35,12 @@ export function railPose(elapsedMs: number, phaseOffset = 0): RailPose {
 }
 
 export function carY(pose: RailPose, car: number): number { return pose.y + (1 - car) * RAIL.carSpacing; }
-export function researchDistance(x: number, y: number) { return ((x - RESEARCH_DISTRICT.cx) / RESEARCH_DISTRICT.rx) ** 2 + ((y - RESEARCH_DISTRICT.cy) / RESEARCH_DISTRICT.ry) ** 2; }
-export function inRailCorridor(x: number, y: number) { return Math.abs(x - RAIL.x) < 2.3 && y >= RAIL.trackStart - 2 && y <= RAIL.trackEnd + 1; }
+export function inRailCorridor(x: number, y: number) { return x >= RAIL_RESERVATION.minX && x <= RAIL_RESERVATION.maxX && y >= RAIL_RESERVATION.minY && y <= RAIL_RESERVATION.maxY; }
+export function railSupportYs(): number[] {
+  const supports=[RAIL.trackStart,RAIL.trackEnd];
+  for(let y=RAIL.trackStart+2.5;y<RAIL.trackEnd-1;y+=3) supports.push(y);
+  return supports.filter(y=>!insideNorthRoad(RAIL.x,y,.35));
+}
 
 export class RailClock {
   elapsedMs = 0;

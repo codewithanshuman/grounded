@@ -373,12 +373,9 @@ export default function App() {
             <DecisionWorkspace baseline={baseline} optimized={optimized} stale={!!baseline && !baselineIsCurrent} busy={cannotRun} targetPct={riskTargetPct} onTargetChange={setRiskTargetPct} onRun={runSimulation} onRisk={() => setActiveView("risk")} onStrategy={() => setActiveView("optimizer")} onProof={() => setActiveView("compare")} onMethod={() => setActiveView("method")} />
             <div className="overview-grid">
               <section className="world-card">
-                <div className="card-heading"><div><small>LIVE SYSTEM VIEW</small><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div><span className="verified-pill">Interactive digital twin</span></div>
+                <div className="card-heading"><div><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div></div>
                 <div className="light-world">
                   <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} onReady={() => setWorldSceneReady(true)} /></Suspense>
-                  <div className={`world-live-state ${forestActivity ? "working" : ""}`}><i /><span><small>{isFoundingWorld ? "WORLD FOUNDING" : forestActivity ? "LIVE ANALYSIS" : "EVIDENCE WORLD"}</small><strong>{isFoundingWorld ? "Construction sequence · profile initialized" : forestActivity ? "Work in progress · not yet evidence" : "System context · verified growth only"}</strong></span></div>
-                  <div className="world-map-id"><span>{(identity?.worldName ?? "Jaipur resilience city").toUpperCase()}</span><b>{identity ? "PRIVATE OPERATING WORLD" : "OPERATING DISTRICT"}</b></div>
-                  <div className="world-map-key" aria-hidden="true"><span><i className="solar" />Power flow</span><span><i className="context" />System asset</span><span><i className="reserve" />Forest reserve</span><span><i className="verified" />Verified growth</span></div>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
                     <small>{forestInspection.status}</small>
@@ -387,11 +384,11 @@ export default function App() {
                     {forestInspection.runId !== "system-context" && <div><span>RUN <code>{forestInspection.runId.slice(0, 12)}</code></span><span>{new Date(forestInspection.occurredAt).toLocaleString()}</span></div>}
                   </aside>}
                 </div>
-                <div className="world-caption"><p>Drag to explore · scroll to zoom · select an object to inspect proof</p>{world && <div><span><b>{world.trees.length}</b> verified trees</span><span><b>{world.buildings.length}</b> resilience buildings</span><span><b>{world.totalRuns}</b> completed runs</span></div>}</div>
+                <div className="world-caption"><p>Drag to pan · scroll to zoom · select a structure to inspect.</p></div>
               </section>
               <aside className="hazard-column">
                 <section className="hazard-card"><div className="card-heading"><div><small>CLIMATE PRESSURE</small><h3>Choose a hazard</h3></div></div><fieldset className="panel-surface" disabled={isRunning}><legend className="sr-only">Hazard controls</legend><StressPanel preset={preset} setPreset={setPreset} isSweeping={isSweeping} disabled={cannotRun} runClimateSweep={runAllHazards} /></fieldset></section>
-                <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><small>EVIDENCE, NOT PROMISES</small><p>Evidence trees appear after completed, reproducible simulations. The surrounding forest is illustrative.</p></div></section>
+                <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><p>Completed simulations grow inspectable evidence trees. The surrounding landscape is illustrative.</p></div></section>
               </aside>
             </div>
             <section className="world-provenance-strip" aria-label="Current model provenance">

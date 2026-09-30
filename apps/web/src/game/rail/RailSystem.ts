@@ -1,11 +1,10 @@
 import Phaser from "phaser";
 import { createBaker, fillFace, type Baker, type Point3 } from "../../reference-city/textures/core";
 import { drawCapitolBox, type Box } from "../../reference-city/textures/capitol/primitives";
-import { projection, GROUND_DEPTH } from "../../reference-city/world/core/worldConstants";
-import { TERRAIN_ATLAS_KEY, terrainTextureKey } from "../../reference-city/textures/terrain";
-import { propTextureKey } from "../../reference-city/textures/props";
+import { projection } from "../../reference-city/world/core/worldConstants";
 import { prefersReducedMotion } from "../../reference-city/systems/ambient";
-import { RAIL, RAIL_STATIONS, RAIL_CYCLE_MS, RailClock, carY, railPose, researchDistance, type RailPose } from "./railModel";
+import { RAIL, RAIL_STATIONS, RAIL_CYCLE_MS, RailClock, carY, railPose, railSupportYs, type RailPose } from "./railModel";
+import { insideNorthRoad } from "../districts/expansionLayout";
 
 const VEHICLE_W = 160, VEHICLE_H = 110, ANCHOR = 32;
 const colors = { top: 0xe9e9db, frontLeft: 0xbbc9bc, frontRight: 0x8fa6a1 };
@@ -62,7 +61,6 @@ export class RailSystem {
   constructor(private scene: Phaser.Scene, inspect: (title:string,evidence:string)=>void) {
     this.clock.paused = prefersReducedMotion();
     bakeTrains(scene);
-    this.drawResearchDistrict();
     this.drawViaduct();
     this.drawStations(inspect);
     for (let train=0; train<2; train++) {
@@ -97,39 +95,6 @@ export class RailSystem {
     }
     if(this.clock.elapsedMs-this.lastStatusAt>=500){this.lastStatusAt=this.clock.elapsedMs;this.publish();}
   }
-  private drawResearchDistrict() {
-    const s=this.scene;
-    for(let x=-16;x<=14;x++) for(let y=-39;y<=-19;y++) {
-      const d=researchDistance(x,y); if(d>1.13)continue;
-      const p=projection.project(x,y);
-      const plaza=Math.abs(y+28)<.8;
-      const kind=d>1?'water':d>.80?'sand':plaza?'plaza':'park';
-      this.objects.push(s.add.image(p.x,p.y+24,TERRAIN_ATLAS_KEY,terrainTextureKey(kind,kind==='plaza'?0:Math.abs(x*7+y)%2)).setOrigin(.5,1).setDepth(GROUND_DEPTH+5));
-      if(d<.73&&x%3===0&&y%3===0&&Math.abs(x-RAIL.x)>3&&!plaza&&!(x>0&&x<10&&y>-33&&y<-24)){
-        this.objects.push(s.add.image(p.x,p.y+24,propTextureKey((x+y)%2?'pine':'tree')).setOrigin(.5,1).setDepth(projection.depth(x,y)));
-      }
-    }
-    // A masonry research campus using the archive's courthouse box primitives.
-    const b=createBaker(s), ox=300, oy=300;
-    const box=(bounds:Box,palette=colors)=>drawCapitolBox(b,bounds,ox,oy,palette);
-    box({u0:-2.5,u1:2.5,v0:-1.7,v1:1.7,z0:0,z1:7});
-    box({u0:-2,u1:2,v0:-1.25,v1:1.25,z0:7,z1:74});
-    box({u0:-2.1,u1:2.1,v0:-1.35,v1:1.35,z0:74,z1:79});
-    for(let floor=0;floor<3;floor++) for(let window=0;window<10;window++) {
-      const u=-1.8+window*.38,z=15+floor*19;
-      fillFace(b,0x386473,1,[[u,1.255,z],[u+.23,1.255,z],[u+.23,1.255,z+11],[u,1.255,z+11]],ox,oy);
-    }
-    for(const u of [-1.6,-.8,0,.8,1.6])box({u0:u-.055,u1:u+.055,v0:1.3,v1:1.45,z0:7,z1:50});
-    box({u0:-2.2,u1:2.2,v0:1.15,v1:1.7,z0:50,z1:54});
-    for(let i=0;i<4;i++)box({u0:-1.1,u1:1.1,v0:1.5+i*.15,v1:1.7+i*.15,z0:0,z1:7-i*1.5});
-    for(let row=0;row<3;row++) for(let col=0;col<5;col++)box({u0:-1.6+col*.65,u1:-1.1+col*.65,v0:-.95+row*.65,v1:-.52+row*.65,z0:80,z1:84},{top:0x346d87,frontLeft:0x1d495e,frontRight:0x457d90});
-    // The front foundation reaches y=401 in texture space. Keep the complete
-    // stairs and plinth inside the bake, then preserve the ground origin at 300.
-    b.finish('grounded:rail:research',600,420);b.destroy();
-    const p=projection.project(6,-29);
-    this.objects.push(s.add.image(p.x,p.y+120,'grounded:rail:research').setOrigin(.5,1).setDepth(projection.depth(8,-27)));
-    this.objects.push(s.add.text(p.x,p.y-106,'RESEARCH PARK',{fontFamily:'IBM Plex Mono',fontSize:'12px',color:'#365b47',backgroundColor:'#f5f4dfe8',padding:{x:12,y:7}}).setOrigin(.5,1).setDepth(projection.depth(8,-27)+10));
-  }
   private drawViaduct() {
     const s=this.scene;
     const g=s.add.graphics().setDepth(-700_000);this.objects.push(g);
@@ -146,28 +111,31 @@ export class RailSystem {
       }
       for(const side of [-1,1])line(0x587a6a,1.8,[[x+side*.9,y,z+12],[x+side*.9,y+.5,z+12]]);
       if(Number.isInteger(y))for(const side of [-1,1])line(0x799584,1.1,[[x+side*.9,y,z],[x+side*.9,y,z+12]]);
-      if(y%3===.5||y%3===-2.5) {
-        for(const side of [-1,1]){
-          face(0x819b98,[[x+side*.55-.13,y-.13,0],[x+side*.55+.13,y-.13,0],[x+side*.55+.13,y-.13,z-6],[x+side*.55-.13,y-.13,z-6]]);
-          face(0xa9b9ad,[[x+side*.55+.13,y-.13,0],[x+side*.55+.13,y+.13,0],[x+side*.55+.13,y+.13,z-6],[x+side*.55+.13,y-.13,z-6]]);
-        }
-      }
     }
-    for(let y=-29;y<=32;y+=4) {
+    // Draw the complete support set independently of the half-open deck loop,
+    // including the far terminus. Street crossings remain clear underneath.
+    for(const y of railSupportYs())for(const side of [-1,1]){
+      const x=RAIL.x,z=RAIL.elevation;
+      face(0x819b98,[[x+side*.55-.13,y-.13,0],[x+side*.55+.13,y-.13,0],[x+side*.55+.13,y-.13,z-6],[x+side*.55-.13,y-.13,z-6]]);
+      face(0xa9b9ad,[[x+side*.55+.13,y-.13,0],[x+side*.55+.13,y+.13,0],[x+side*.55+.13,y+.13,z-6],[x+side*.55+.13,y-.13,z-6]]);
+    }
+    for(let y=RAIL.trackStart+1;y<=RAIL.trackEnd-1;y+=4) {
       const x=RAIL.x,z=RAIL.elevation;
       line(0x587b70,2,[[x-.88,y,z],[x-.88,y,z+47],[x+.88,y,z+47],[x+.88,y,z]]);
-      if(y<28)for(const lane of [-RAIL.laneOffset,RAIL.laneOffset])line(0x6b897e,.8,[[x+lane,y,z+42],[x+lane,y+4,z+42]]);
+      if(y+4<=RAIL.trackEnd)for(const lane of [-RAIL.laneOffset,RAIL.laneOffset])line(0x6b897e,.8,[[x+lane,y,z+42],[x+lane,y+4,z+42]]);
     }
   }
   private drawStations(inspect:(title:string,evidence:string)=>void) {
     for(const station of RAIL_STATIONS) {
       const z=RAIL.elevation;
-      const describe=()=>inspect(station.name,`Operating stop on the four-station coastal railway. Both tracks have a side platform, joined by a raised pedestrian overpass above the overhead wires. Services dwell for five simulated seconds. Illustrative transit, not a surveyed Jaipur railway or measured ridership.`);
+      const describe=()=>inspect(station.name,`Operating stop on the dedicated northern-mainland metro. Both tracks have a side platform, joined by a raised pedestrian overpass above the overhead wires. Services dwell for five simulated seconds. Illustrative transit, not a surveyed Jaipur railway or measured ridership.`);
       for(const side of [-1,1]) {
         const b=createBaker(this.scene),ox=250,oy=260;
         const box=(bounds:Box,palette=colors)=>drawCapitolBox(b,bounds,ox,oy,palette);
-        // Piers flank the promenade, leaving the existing reserve approach open.
-        for(const v of [-1.6,1.6])for(const u of [-.5,.5])box({u0:u-.09,u1:u+.09,v0:v-.09,v1:v+.09,z0:0,z1:z-7});
+        // Supports sit beside, not in, the transverse streets and stair approaches.
+        for(const v of [-1.6,.1,1.6])for(const u of [-.64,.64]) {
+          if(!insideNorthRoad(RAIL.x+side*1.65+u,station.y+v,.12))box({u0:u-.09,u1:u+.09,v0:v-.09,v1:v+.09,z0:0,z1:z-7});
+        }
         box({u0:-.75,u1:.75,v0:-1.9,v1:1.9,z0:z-7,z1:z});
         const trackEdge=side===1?-.71:.64;
         box({u0:trackEdge,u1:trackEdge+.07,v0:-1.8,v1:1.8,z0:z,z1:z+1},{top:0xf0d98d,frontLeft:0xd0b776,frontRight:0xb79759});

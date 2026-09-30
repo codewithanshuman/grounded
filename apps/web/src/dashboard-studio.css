@@ -271,3 +271,11 @@
 @media (prefers-reduced-motion: reduce) {
   .lab-shell *, .lab-shell *::before, .lab-shell *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
 }
+.lab-shell .decision-evidence { margin-top: 18px; border-top: 1px solid #e0e7dc; padding-top: 15px; color: #52664f; font: 400 14px/1.7 "DM Sans",sans-serif; }
+.lab-shell .decision-evidence summary { cursor: pointer; font-weight: 600; color: #335744; padding: 4px 0; }
+.lab-shell .decision-evidence .cohort-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; margin: 14px 0; }
+.lab-shell .decision-evidence .cohort-grid article { padding: 14px; border: 1px solid #dfe7d9; border-radius: 10px; background: #f8faf4; }
+.lab-shell .decision-evidence p { margin: 8px 0; }
+.lab-shell .decision-evidence ul { padding-left: 20px; margin-block: 12px; }
+.lab-shell .decision-evidence li { margin: 5px 0; }
+@media (max-width: 1080px) { .lab-shell .decision-evidence .cohort-grid { grid-template-columns: 1fr; } }

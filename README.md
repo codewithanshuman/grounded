@@ -55,6 +55,13 @@ Source: https://github.com/anshumanbahekar/grounded
 - **Statistical honesty** — critical-risk estimates include a 95% Wilson score
   interval, and the in-app model card discloses sources, calibration status,
   operational assumptions, and important boundaries.
+- **Decision-readiness gates** — an optimized policy clears the selected planning
+  target only when the selected sample and every disjoint holdout's unrounded
+  upper risk bound meet it, replay/count audits pass, no critical failures are
+  introduced in the tested holdouts or stress settings, and recommendation and
+  shortlist stability hold. Zero failures in a 200-future holdout cannot resolve
+  a 1% target. These are nominal per-cohort sampling bounds, not simultaneous,
+  cluster-adjusted or field reliability guarantees.
 - **Causal sensitivity** — paired stress perturbations quantify which physical
   uncertainty controls risk, then replay the two dominant drivers together to
   expose second-order interaction instead of assuming additive effects.
@@ -81,6 +88,12 @@ Source: https://github.com/anshumanbahekar/grounded
 - **A forest earned by evidence** — every completed simulation plants a
   persistent tree. Buildings appear only after a validated resilience
   milestone, never from a decorative timer.
+- **An expanded, inspectable city** — a rounded northern landmass has a dedicated
+  four-stop, two-track metro, connected streets, a raised water bridge, mixed
+  groves and twenty spaced architectural placements across nine designs. The
+  original airport, Grounded hoarding, city, forest bridge and harbour remain
+  intact. The added district and accelerated transit are explicitly illustrative;
+  they do not claim surveyed Jaipur assets or add transport/utility forecasts.
 
 ## Five-minute judge demo
 

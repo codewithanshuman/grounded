@@ -49,7 +49,7 @@ export function StressPanel({ preset, setPreset, isSweeping, runClimateSweep, di
   disabled?: boolean;
 }) {
   return (
-    <div className="w-72 space-y-2">
+    <div className="space-y-2">
       <p className="text-[11px] text-slate-500 mb-1">Pick the weather regime to test, then run the calibrated evidence population.</p>
       {PRESET_ORDER.map((id, index) => <button key={id} onClick={() => setPreset(id)} aria-pressed={preset === id} className={`scenario-card ${preset === id ? "active" : ""}`}><span className="hazard-number" aria-hidden="true">0{index + 1}</span><span><span className="hazard-title">{PRESETS[id].label}</span><span className="hazard-description">{PRESETS[id].blurb}</span></span><i className="hazard-choice" aria-hidden="true" /></button>)}
       <button onClick={runClimateSweep} disabled={disabled || isSweeping} className="matrix-action">{isSweeping ? "Running 2,500 futures…" : "Compare all five hazards"}</button>

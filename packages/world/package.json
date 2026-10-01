@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@verdant/sim": "workspace:*",
     "@verdant/protocol": "workspace:*"
   },
   "devDependencies": {

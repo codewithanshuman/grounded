@@ -1,237 +1,230 @@
-# Grounded — Climate Resilience Digital Twin
+# Grounded — Climate Resilience Lab
 
-**Grounded lets a community test thousands of possible climate futures before
-the real emergency arrives.** It models a solar, battery, grid, hospital,
-homes, and EV microgrid; finds the exact chain that causes critical failure;
-and searches for a low-disruption intervention that survives the same future.
+Grounded tests a solar, battery, grid, hospital, homes and EV microgrid against
+simulated climate futures, then searches for a low-disruption operating policy.
+The city and Resilience Forest visualize model work; they are not surveyed
+Jaipur infrastructure or evidence of real-world construction or planting.
 
-Public verified demo: https://grounded-peach.vercel.app
+Public application: [grounded-peach.vercel.app](https://grounded-peach.vercel.app)
 
-Source: https://github.com/anshumanbahekar/grounded
+Source: [anshumanbahekar/grounded](https://github.com/anshumanbahekar/grounded)
 
-## Why it is different
+Grounded is a probabilistic decision-support prototype, not a certified
+infrastructure-grade digital twin. Its sources, simulated assumptions,
+uncertainty and unresolved evidence are displayed alongside the results.
 
-- **Climate-calibrated, operational-data digital twin** — NASA POWER monthly
-  climatology is joined to a verified public operational reference: 34,944
-  quarter-hour demand readings, 5,252,112 gross-metered PV intervals from 300
-  systems, and 9,210 actual outage/restoration-duration records. Each source
-  is disclosed, quality-scored and bound into the reproducibility fingerprint.
-  Each future carries energy state through 72 hours (288 dispatch intervals)
-  across correlated heat, cloud, measured load/PV shapes, EV peaks and an
-  empirical restoration-duration distribution.
-- **Engineering-level accounting** — PV temperature loss, battery charge and
-  discharge limits, round-trip efficiency, minimum SOC, degradation cost,
-  grid cost, grid carbon and critical/flexible unserved energy are all part of
-  the executable model. Engine 2.6 also reports LOLP, LOLE, EENS and CVaR95 so
-  judges can distinguish failure frequency, duration, energy severity and the
-  average outcome inside the worst 5% of futures.
-- **Conservative renewable provenance** — direct solar and solar-charged
-  battery discharge are traced separately through every dispatch interval.
-  Starting battery energy receives no renewable credit; the model reports
-  solar capture, curtailment, renewable energy served and avoided operational
-  grid carbon without claiming lifecycle or offset accounting.
-- **Multi-hazard Climate Matrix** — one click tests the same microgrid against
-  normal conditions, heatwave, storm, EV surge, and a combined extreme event.
-  A worst-case robust score prevents safe averages from hiding a catastrophic
-  weak point.
-- **Explainable, out-of-sample strategy search** — Grounded exhaustively
-  evaluates 245 battery-reserve, EV-delay, and pre-cooling strategies on an
-  independent 300-future discovery cohort, exposes the non-dominated Pareto
-  frontier, then validates the winner on the original unseen population,
-  three additional disjoint holdouts, exact paired McNemar inference, four
-  disclosed one-at-a-time shocks and an 81-cell compound stress envelope. The
-  Pareto finalists are independently reranked on every holdout so the UI
-  exposes recommendation rank, winner identity and maximum regret.
-- **Machine-audited dispatch** — every 15-minute step closes an explicit
-  source-to-sink energy balance. Seven invariants verify conservation,
-  classification totals, battery bounds, finite outputs, exact replay,
-  declared Monte Carlo precision and the measured-data quality gate.
-- **Commission any real site** — three ordinary CSV exports (15-minute demand,
-  PV inverter power, and outage/restoration history) become a persistent
-  `COMMISSIONED_SITE` profile. Grounded rejects malformed contracts, measures
-  interval completeness, withholds every fifth day/event, fingerprints the
-  normalized evidence and labels weak inputs `REVIEW` instead of manufacturing
-  confidence.
-- **Statistical honesty** — critical-risk estimates include a 95% Wilson score
-  interval, and the in-app model card discloses sources, calibration status,
-  operational assumptions, and important boundaries.
-- **Decision-readiness gates** — an optimized policy clears the selected planning
-  target only when the selected sample and every disjoint holdout's unrounded
-  upper risk bound meet it, replay/count audits pass, no critical failures are
-  introduced in the tested holdouts or stress settings, and recommendation and
-  shortlist stability hold. Zero failures in a 200-future holdout cannot resolve
-  a 1% target. These are nominal per-cohort sampling bounds, not simultaneous,
-  cluster-adjusted or field reliability guarantees.
-- **Causal sensitivity** — paired stress perturbations quantify which physical
-  uncertainty controls risk, then replay the two dominant drivers together to
-  expose second-order interaction instead of assuming additive effects.
-- **Interpretable ML audit** — after exact dispatch finishes, a regularized
-  logistic surrogate learns five physical risk drivers on 80% of the seeded
-  futures and reports AUROC, Brier score, calibration error and balanced
-  accuracy only on the untouched 20%. Standardized coefficients are exposed;
-  the surrogate is diagnostic and never controls dispatch or recommendations.
-- **Robust multi-objective evidence** — the strategy search spans all five
-  hazards and reports risk, unserved energy, disruption, cost and carbon. The
-  selected plan is validated on the original population and replayed against
-  the 12 highest-stress dated NASA POWER climate days from 2023. NASA supplies
-  observed weather; outage and demand conditions remain explicitly simulated.
-- **Paired policy safety** — every holdout and stress cell replays identical
-  seeds before and after intervention, counts prevented and newly introduced
-  failures, and reports exact paired p-values, Wilson bounds, P99 severity and
-  CVaR99. The 81-cell full-factorial envelope tests restoration time, demand,
-  solar capacity and starting battery SOC together and discloses its worst cell.
-- **Counterfactual proof** — the Compare Worlds panel replays the identical
-  failure seed before and after the intervention, showing whether the hospital
-  actually keeps power.
-- **Durable evidence** — complete run summaries are persisted in SQLite, so a
-  server restart does not invalidate a run ID or prevent later optimization.
-- **A forest earned by evidence** — every completed simulation plants a
-  persistent tree. Buildings appear only after a validated resilience
-  milestone, never from a decorative timer.
-- **An expanded, inspectable city** — a rounded northern landmass has a dedicated
-  four-stop, two-track metro, connected streets, a raised water bridge, mixed
-  groves and twenty spaced architectural placements across nine designs. The
-  original airport, Grounded hoarding, city, forest bridge and harbour remain
-  intact. The added district and accelerated transit are explicitly illustrative;
-  they do not claim surveyed Jaipur assets or add transport/utility forecasts.
+## What the model does
 
-## Five-minute judge demo
+- Engine **2.8.0** carries energy state through 72 hours at 15-minute resolution
+  (288 dispatch intervals). It includes PV temperature loss, battery charge and
+  discharge limits, efficiency, minimum SOC, degradation cost, grid cost and
+  carbon, and critical/flexible unserved energy.
+- Every dispatch step is audited for source-to-sink energy balance. Run audits
+  also check classification totals, battery bounds, finite outputs, deterministic
+  replay, declared sampling precision and the operational-data quality gate.
+- Renewable provenance distinguishes direct solar, solar-charged battery
+  discharge and starting battery energy. Starting energy receives no renewable
+  credit. Carbon results are operational grid estimates, not lifecycle offsets.
+- A five-hazard matrix compares normal conditions, heatwave, storm, EV surge
+  and a combined extreme event using paired seeds. Reliability and severity
+  quantities describe the **72-hour experiment**, not annual facility reliability.
+- Counterfactual replay compares the same seed before and after an intervention.
+  Paired perturbations expose sensitivity and interaction inside the model;
+  they do not establish real-world causation.
+- A diagnostic logistic surrogate reports held-out predictive scores. It never
+  controls dispatch or selects the recommended policy.
 
-1. Choose **Extreme Combined Event** and run 500 three-day futures. Point out
-   the operational-data selector, source fingerprint, NASA climate fingerprint
-   and 288-interval horizon.
-2. Open **Risk**: show the critical-rate distribution, cause contribution,
-   the timestamped chain to hospital power failure, then show LOLP, LOLE,
-   EENS, CVaR95, the renewable-provenance ledger, and the holdout-tested ML
-   audit that explains which physical conditions predict simulated failure.
-3. Run **Matrix** from the Stress panel: explain that 2,500 correlated futures
-   compare all hazards with identical seeds and identify the system's weakest
-   condition.
-4. Open **Optimizer** and run the search: point out 245 strategies across five
-   hazards, the risk/energy/cost/carbon Pareto frontier, the independent discovery cohort,
-   three holdouts, exact paired inference, the 81-cell compound stress envelope,
-   Pareto decision-stability ranks, ablation benchmarks and dated historical replay.
-5. Open **Method**: show the measured demand/PV curves, 9,210 historical outage
-   records, restoration P50/P90/P95 and all three clickable source records.
-6. Open **Compare**: show the same seed failing in World A and surviving in
-   World B, then point to the newly earned growth in the persistent forest.
+## Target-aware strategy search and validation
+
+The optimizer exhaustively evaluates 245 battery-reserve, EV-delay and
+pre-cooling policies on a separate discovery cohort. It receives the user's
+planning target. Among policies whose discovery upper risk bound meets that
+target, it selects minimal disruption, then cost/carbon. If none qualifies, it
+returns an explicitly unresolved risk-first fallback instead of implying that
+the target was achieved. Discovery bounds are pointwise and do not validate the
+winner selected from 245 policies.
+
+Mixed-hazard evaluations sharing a seed are treated as a **seed cluster**, not
+as independent observations. The decision bound is a one-sided 95% exact
+binomial upper bound on whether *any* hazard in a seed cluster fails. That
+event conservatively bounds the mean hazard-failure probability. Nominal
+evaluation-level Wilson intervals remain diagnostic; they are not substituted
+for the cluster decision bound. This is **not a cluster bootstrap**, and the
+bounds are not simultaneous guarantees across all cohorts or stress settings.
+
+The selected policy is rerun on the original population and checked on three
+disjoint mixed-hazard holdouts, four disclosed one-at-a-time shocks, an 81-cell
+compound stress envelope, and independent shortlist reranking. Holdout size is
+chosen before observing outcomes from the planning target and hazard count,
+subject to a 2,000-evaluation-per-cohort cap. A tighter target may remain
+unresolved; zero observed failures never establishes zero risk.
+
+Readiness requires valid counts, audits, replay, sources, policy identity and
+seed separation; the selected sample and every holdout upper bound meeting
+the target; no introduced failures in the tested holdouts/shocks/stress cells;
+and recommendation/shortlist stability. A forest building has a stricter gate:
+it also requires a positive reduction from a nonzero baseline and exact paired
+seed-cluster McNemar improvement with `p < 0.05` in **every** independent holdout.
+Neither readiness nor a building certifies a real facility.
+
+Only an audited completed run earns a persistent tree. A qualifying optimization
+earns a pending Evidence City milestone. The user chooses one of three designs
+in the earned storage, flexibility or resilience category, rotates it and places
+it on an eligible plot. Shared rules reject locked or occupied plots; construction
+starts only after a committed placement. Categories describe levers present in
+the validated combined policy, not isolated causal effects of an individual asset.
+
+Later proof can upgrade a category through three levels when the source context
+matches, the target is no weaker and the worst holdout bound strictly improves.
+Receipts prevent duplicate rewards on replay or reload. A building opens its
+certificate, complete saved proof and comparison/replay actions. Existing city
+objects and legacy history are retained; they are not retroactively certified.
 
 ## Measured operational reference
 
-The default operational layer is deliberately real and reproducible:
+The default operational layer is real, disclosed **New South Wales reference
+data**, not Jaipur facility telemetry:
 
-- **Demand:** Ausgrid Auburn 33/11 kV FY2025 raw SCADA/metered demand,
-  34,944 readings at 15-minute resolution (99.73% expected-interval coverage).
-- **PV:** Ausgrid Solar Home Electricity Data, 5,252,112 valid half-hour gross
+- Demand: Ausgrid Auburn 33/11 kV FY2025 SCADA/metered demand, 34,944 readings
+  at 15-minute resolution (99.73% expected-interval coverage).
+- PV: Ausgrid Solar Home Electricity Data, 5,252,112 valid half-hour gross
   generation intervals across 300 systems (99.93% coverage), capacity-weighted
   and normalized to the engine's 15-minute clock.
-- **Outage/restoration:** 9,210 Ausgrid past-outage events from 2016-07-01 to
-  2021-06-30, representing 5,522,219 customer interruptions. The simulator
-  samples the observed 101-point duration quantile curve (median 1.77 h, P90
-  6.40 h, P95 10.24 h); audited FY2025 SAIFI sets annual occurrence frequency.
+- Outage duration: 9,210 Ausgrid past-outage events from 2016-07-01 through
+  2021-06-30. The simulator samples a derived duration quantile curve; audited
+  FY2025 SAIFI supplies the reference annual occurrence frequency.
 
-The compact derived profile is `data/ausgrid-measured-reference.json`, with
-source fingerprint `SITE-68A008486D22`. `scripts/build-site-profile.mjs`
-rebuilds it from the three raw exports. This is a measured New South Wales
-reference cohort, not Jaipur telemetry. The interface says so explicitly;
-the Local Commissioning panel accepts the team's own meter and outage exports
-under the contract in `data/SITE_DATA_CONTRACT.md`.
+`data/ausgrid-measured-reference.json` contains the compact profile with source
+fingerprint `SITE-68A008486D22`; `scripts/build-site-profile.mjs` rebuilds it
+from the raw exports. Withheld demand/PV days and outage events check derived
+profile stability. They do not validate the scaled Jaipur facility or the joint
+coincidence of weather, load, PV and outages.
 
-The reference profile also has a blocked out-of-sample check: 72 demand days,
-73 PV days and 1,842 outage events are withheld. Current holdout errors are
-0.415% demand-profile MAE, 0.007 PV capacity-factor MAE and 0.0231 outage
-duration KS drift. These metrics validate profile stability; they do not turn a
-cross-region reference into Jaipur commissioning data.
+The bundled NSW reference contains **96-slot average profiles** and remains an
+explicit repeated-average-day fallback. Commissioned exports can now retain
+complete paired local demand/PV days. Engine 2.8 samples consecutive three-day
+training blocks uniformly where available, preserving their measured load/PV
+pairing and inter-day sequence. Without a complete block it discloses independent
+paired-day sampling with replacement. Battery SOC continues across midnight.
 
-Real Jaipur telemetry is accepted only through the private evidence workflow in
-`validation/`. A named reviewer, explicit permissions, meter boundary, 30-day
-interval coverage and file fingerprints are required before Grounded labels a
-profile commissioned. Run `pnpm validate:partner` against the private inbox;
-raw exports are ignored by Git and never belong in the public static build.
+Every fifth complete paired day is withheld for profile checks and never drawn
+for model scenarios. Those measured-day checks differ from the optimizer's
+independent seed holdouts. The run records sampled source dates, per-day hashes,
+raw-export/dataset hashes and actual trajectories in its identity. Weekday/weekend
+labels come from the local calendar; high-load/low-PV labels use training quartiles.
+Low PV is not an observed weather label. Configured load/PV scaling and simulated
+stress overlays remain assumptions. NASA POWER supplies location-specific
+climatology and dated stress-day observations; dated climate replay does not turn
+simulated outages or facility outcomes into observations.
 
-A real Monte Carlo energy simulation for a solar+battery+grid microgrid, wrapped
-in a persistent **Resilience Forest**: every simulation you run plants a tree;
-every genuinely validated fix the optimizer finds grows a building. Nothing
-grows on a timer or from the UI alone — only from real, completed work.
+## Commissioning a site honestly
 
-Architecture and tooling conventions (pnpm workspace, Fastify+WS server,
-Vite+React client, packages split into pure/testable logic vs. app glue) are
-deliberately modelled on the `claude-clan-main` project this was built
-alongside.
+The [CSV contract](data/SITE_DATA_CONTRACT.md) defines quarter-hour demand/PV
+exports and an outage log with a separately declared, continuously observed
+reliability window. The uploader's complete-coverage attestation is not
+independent verification. Unknown gaps must not be declared continuous.
 
-## Packages
+Outage frequency is event count divided by the **full observation exposure**,
+including outage-free days, not the span between the first and last event.
+One outage in 30 observed days estimates 12.175 interruptions/year. A nominal
+equal-tailed exact Poisson (Garwood) 95% interval reports rate uncertainty,
+including a nonzero upper limit for zero events, under the disclosed stationary,
+independent-arrival and complete-reporting assumptions.
 
-- `packages/protocol` — shared zod schemas + shared isometric geometry constants
-- `packages/sim` — the energy model: physics simulation, Monte Carlo runner,
-  intervention optimizer, failure-narrative builder. Pure functions, no I/O.
-- `packages/world` — SQLite-backed (`node:sqlite`) persistence for complete
-  evidence runs, the Resilience Forest, and its growth policy.
-- `apps/server` — Fastify + WebSocket API tying `sim` and `world` together.
-- `apps/web` — Vite + React + Phaser client: an isometric forest that grows
-  live inside a structured evidence laboratory (Digital Twin, Climate Matrix,
-  Risk Evidence, Strategy, Counterfactual Proof, and Methodology).
-- `apps/cli` — boots server + web together for local development.
+Demand, PV and reliability have separate evidence labels. Good load/PV exports
+with sparse outage history are `PARTIALLY_VERIFIED`, not fully verified.
+Reliability needs at least 365.25 observed days, 30 complete events, six
+withheld events and acceptable withheld-duration drift before it can qualify.
+Sparse commissioned reliability does not replace the simulator's disclosed
+preset frequency and configured restoration assumptions. These are internal data-quality checks,
+not proof of ownership, meter accuracy, legal authority or field validation.
 
-## Running it
+Authorized Jaipur evidence belongs in the private `validation/` workflow.
+Unanswered outreach is not a partnership. Raw exports, correspondence and
+signatures must not enter the public repository or static build. The current
+anonymous Fastify service is **not ready to accept private operational data**;
+see [deployment boundaries](docs/DEPLOYMENT.md).
+
+## Evidence persistence and architecture
+
+- The static browser engine and server use shared request schemas, simulation,
+  decision-readiness and growth logic in `packages/protocol` and `packages/sim`.
+- Browser IndexedDB retains baseline summaries, complete optimization reports,
+  planning target and manifests in up to **20 snapshots per workspace on that
+  browser/device**. Canonical JSON SHA-256 checksums detect accidental
+  corruption; they are not signatures, encryption or proof of authenticity.
+  Schema, owner scope, audit/count/source consistency and model compatibility
+  are checked on restore. An incompatible or corrupt latest record is retained
+  and reported rather than silently used or replaced by an older decision.
+  Milestone proofs are pinned separately from the rolling snapshot limit; they
+  remain device-local and can still be lost if browser storage is cleared.
+- The local server stores run summaries and full optimization reports in SQLite
+  schema version 3. Immutable result-run proof records preserve certificates even
+  when a baseline is optimized again. Versioned tables and receipts retain history;
+  databases written by a newer schema are rejected rather than overwritten.
+- GitHub sign-in/Supabase world sync in the public static application does
+  **not** mean the full evidence report is stored in the cloud. Clearing browser
+  storage can remove local evidence. The server is currently an anonymous,
+  single-world service, not an authenticated multi-tenant evidence backend.
+- Replay recomputes the saved baseline and, where present, the complete policy
+  search, holdouts, stress envelope and stability report in a separate cancellable
+  browser worker. It compares scientific values and source-date ledgers, ignoring
+  only transport run IDs/timestamps. A replay pass establishes deterministic model
+  agreement, not field validity or an external signature. Unsupported model
+  versions remain retained and cannot be silently replayed as the current model.
+
+Packages: `packages/protocol` (schemas), `packages/sim` (pure model and shared
+gates), `packages/world` (SQLite), `apps/server` (Fastify/WebSocket), `apps/web`
+(React/Phaser/worker), and `apps/cli` (local development orchestration).
+The workspace and visual city conventions were adapted from `claude-clan-main`.
+
+## Running and checking it
 
 ```bash
-pnpm install
+pnpm install --frozen-lockfile
 pnpm --filter @verdant/cli exec tsx src/index.ts
-# or, in two terminals:
-#   cd apps/server && pnpm dev      (http://localhost:8787)
-#   cd apps/web    && pnpm dev      (http://localhost:5173)
-```
+# Or run apps/server and apps/web dev scripts in separate terminals.
 
-For a single production service:
-
-```bash
+pnpm build:static                  # public browser-compute application
 pnpm build
-pnpm start                         # web + API + WebSocket on :8787
-docker compose up --build          # equivalent container rehearsal
+pnpm start                         # local server rehearsal on :8787
+
+pnpm -r typecheck
+NODE_OPTIONS=--experimental-sqlite pnpm -r test
+pnpm exec playwright test          # separate browser suite; verify its result
+pnpm -r build
 ```
 
-For the read-only Vercel/static showcase:
+`node:sqlite` is experimental in Node 22; server scripts enable the required
+flag. `GET /api/health` is the server health check. Releasing a static build and
+hosting a server with private telemetry are different deployment decisions.
+See [deployment](docs/DEPLOYMENT.md) and the
+[GitHub/Vercel runbook](docs/GITHUB_VERCEL_RUNBOOK.md).
 
-```bash
-pnpm build:static
-```
+## A focused judge walkthrough
 
-GitHub and Vercel release commands are documented in
-`docs/GITHUB_VERCEL_RUNBOOK.md`.
+1. Run 500 Extreme Combined Event futures. Explain the 72-hour horizon, source
+   fingerprints, NSW reference scope and run audit.
+2. Open Risk: show critical loss risk, loss duration, unserved energy, a dispatch
+   event timeline and a reproducible failure seed.
+3. Compare the five hazards, then run Strategy with a stated planning target.
+   Show the discovery selection rule and independent cluster holdouts. If a
+   gate is unresolved, explain it; do not present the plan as validated.
+4. Replay the same seed before/after and inspect paired failures, stress cells
+   and shortlist stability. A lower selected-sample percentage is not enough.
+5. Open Proof to replay/export the full saved report. If every growth gate passes,
+   choose an earned design and plot, then inspect its certificate. Open Method for
+   source/evidence limitations and reload without duplicate world growth.
 
-`GET /api/health` is the deployment health check. See
-`docs/DEPLOYMENT.md` for persistence, origins and production boundaries.
+## What remains
 
-`node:sqlite` is experimental in Node 22 — the server's `dev`/`start` scripts
-already set `NODE_OPTIONS=--experimental-sqlite` for you.
+This release implements the integrity upgrade, paired measured-day sampling,
+Evidence City placement and complete proof replay. Richer generator/clinical-tier/
+EV/thermal models, cluster-bootstrap and tail/CVaR uncertainty, authenticated
+Fastify tenant isolation, job queues and external facility validation remain
+unfinished. The model does not implement AC power flow, protection coordination
+or network failure propagation. Procurement and safety decisions require local
+measurements and qualified engineering review.
 
-## Verifying it
-
-```bash
-pnpm -r typecheck   # all 6 TS packages/apps, zero errors
-NODE_OPTIONS=--experimental-sqlite pnpm -r test   # 37 unit/integration tests
-pnpm exec playwright test                       # judge flow, commissioning, mobile layout
-pnpm -r build       # server compiles, web produces a production bundle
-```
-
-## What's measured vs. simulated
-
-Measured and fingerprinted: a 96-slot demand profile from one year of 15-minute
-network readings, a 96-slot PV capacity-factor profile derived from 300
-gross-metered systems, and an empirical restoration-duration distribution from
-9,210 historical events. NASA POWER supplies location-specific climatology and
-dated stress-day observations.
-
-Executable and tested: the physics model (priority-based energy allocation,
-stochastic weather/outages/demand), the Monte Carlo population, the optimizer's
-grid-search, energy-balance audit, deterministic manifests, disjoint holdout
-validation, ML-surrogate holdout scoring, SQLite evidence persistence, the forest's growth policy and the
-server↔client wiring.
-
-Still simulated: individual 72-hour future weather, outage occurrence and the
-coincidence of load, PV and restoration. The public operational cohort is used
-as a measured reference shape/distribution and is scaled to the configured
-Jaipur microgrid; it is not field telemetry from that facility. The model does
-not claim AC power-flow, protection coordination, component-network failures or
-certified engineering status. NREL PVWatts remains a methodology reference;
-real procurement requires local site measurements and engineering review.
+See [Science upgrade status](docs/SCIENCE_UPGRADE.md) for implemented work and
+remaining boundaries. No software change guarantees a competition prize.

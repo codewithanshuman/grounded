@@ -5,6 +5,11 @@ import type { GrowthEvent, WorldState } from "@verdant/protocol";
 import type { RailStatus } from "./rail/RailSystem";
 import { RAIL_STATIONS } from "./rail/railModel";
 import "./rail/rail-controls.css";
+import type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placementModel";
+import type { EvidencePlacementStatus } from "./evidenceCity/EvidenceCityPlacement";
+import type { EvidenceConstructionStatus } from "./evidenceCity/EvidenceConstruction";
+import "./evidenceCity/evidence-city.css";
+export type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placementModel";
 
 export type ForestActivity = "founding" | "simulation" | "optimization" | "climate" | null;
 
@@ -15,34 +20,49 @@ export type ForestInspection = {
   evidence: string;
   runId: string;
   occurredAt: number;
+  milestoneId?: string;
 };
 
-export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady }: {
+export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady, buildPlan = null, onPlace, onRotate, onCancel }: {
   world: WorldState | null;
   pendingGrowth: GrowthEvent[];
   activity: ForestActivity;
   onInspect?: (inspection: ForestInspection) => void;
   onReady?: () => void;
+  buildPlan?: EvidenceBuildPlan | null;
+  onPlace?: (placement: EvidencePlacement) => void;
+  onRotate?: () => void;
+  onCancel?: () => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [district, setDistrict] = useState<CityView>("city");
   const [railStatus, setRailStatus] = useState<RailStatus | null>(null);
+  const [placementStatus, setPlacementStatus] = useState<EvidencePlacementStatus | null>(null);
+  const [constructionStatus, setConstructionStatus] = useState<EvidenceConstructionStatus[]>([]);
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GroundedCityScene | null>(null);
   const inspectRef = useRef(onInspect);
   const readyRef = useRef(onReady);
   const activityRef = useRef(activity);
   const worldRef = useRef(world);
+  const planRef = useRef(buildPlan);
+  const placementCallbacksRef = useRef({ onPlace, onRotate, onCancel });
   inspectRef.current = onInspect;
   readyRef.current = onReady;
   activityRef.current = activity;
   worldRef.current = world;
+  planRef.current = buildPlan;
+  placementCallbacksRef.current = { onPlace, onRotate, onCancel };
 
   useEffect(() => {
     if (!containerRef.current) return;
     const scene = new GroundedCityScene();
     scene.setInspectHandler((inspection) => inspectRef.current?.(inspection));
     scene.setRailStatusHandler(setRailStatus);
+    scene.setPlacementHandlers({ onPlace: (placement) => placementCallbacksRef.current.onPlace?.(placement),
+      onRotate: () => placementCallbacksRef.current.onRotate?.(), onCancel: () => placementCallbacksRef.current.onCancel?.(),
+      onStatus: setPlacementStatus });
+    scene.setConstructionStatusHandler(setConstructionStatus);
     sceneRef.current = scene;
     const game = new Phaser.Game({
       type: Phaser.WEBGL,
@@ -59,6 +79,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
     game.events.once(Phaser.Core.Events.READY, () => {
       if (worldRef.current) scene.setGroundedWorld(worldRef.current);
       scene.setActivity(activityRef.current);
+      scene.setBuildPlan(planRef.current);
       readyRef.current?.();
     });
 
@@ -71,6 +92,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
 
     return () => {
       observer.disconnect();
+      scene.setPlacementHandlers({}); scene.setConstructionStatusHandler(undefined);
       game.destroy(true);
       gameRef.current = null;
       sceneRef.current = null;
@@ -80,12 +102,13 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
   }, []);
 
   useEffect(() => {
-    if (world && sceneRef.current?.scene?.isActive()) sceneRef.current.setGroundedWorld(world);
-  }, [world, pendingGrowth.length]);
+    if (world && sceneRef.current?.scene?.isActive()) sceneRef.current.setGroundedWorld(world, pendingGrowth);
+  }, [world, pendingGrowth]);
 
   useEffect(() => {
     sceneRef.current?.setActivity(activity);
   }, [activity]);
+  useEffect(() => { sceneRef.current?.setBuildPlan(buildPlan); }, [buildPlan]);
 
   return <div style={{ width: "100%", height: "100%", position: "relative" }}>
     <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
@@ -104,5 +127,20 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady 
       <p>Timetable demonstration. Not a live service or an input to the energy model.</p>
       </div>
     </details>}
+    {buildPlan && <section className="evidence-placement-control" aria-label="Evidence building placement">
+      <div className="evidence-placement-copy"><strong>{placementStatus?.plotLabel ?? "Choose an evidence plot"}</strong>
+        <span role="status">{placementStatus?.message ?? "Green tiles are available; red tiles are reserved or occupied."}</span>
+        <small><i className="available" /> Available <i className="unavailable" /> Reserved / occupied · {placementStatus?.available ?? 0} available</small>
+      </div>
+      <div className="evidence-placement-actions"><button type="button" onClick={onRotate}>Rotate front <kbd>R</kbd></button>
+        <span className="evidence-orientation">{buildPlan.rotation}° front</span>
+        <button type="button" onClick={onCancel}>Cancel <kbd>Esc</kbd></button></div>
+      <p>Click a green land tile to place. Drag to pan. Front orientation uses authored isometric faces, not 3D rotation.</p>
+    </section>}
+    {constructionStatus.length > 0 && <section className="evidence-construction-control" aria-label="Evidence construction animation" aria-live="polite">
+      {constructionStatus.map((status) => <div key={status.milestoneId}><strong>{status.label}</strong><ol>
+        {(["Foundation", "Frame", "Complete"] as const).map((phase) => <li key={phase} aria-current={phase === status.phase ? "step" : undefined}>{phase}</li>)}
+      </ol></div>)}<small>Presentation of an already recorded model milestone.</small>
+    </section>}
   </div>;
 }

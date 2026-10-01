@@ -1,3 +1,5 @@
+import { MODEL_VERSION } from "@verdant/sim";
+
 const sources = [
   {
     name: "NASA POWER",
@@ -19,11 +21,12 @@ const sources = [
   },
 ];
 
-export function MethodologyPanel({ calibration, siteData, locationLabel, latestRun, onCommission }: { calibration: ClimateCalibration | null; siteData?: SiteDataProfile | null; locationLabel: string; latestRun?: RunSummary | null; onCommission: (input: CommissionSiteInput) => Promise<SiteDataProfile> }) {
+export function MethodologyPanel({ calibration, siteData, locationLabel, latestRun, onCommission, commissioningAvailable = true }: { calibration: ClimateCalibration | null; siteData?: SiteDataProfile | null; locationLabel: string; latestRun?: RunSummary | null; onCommission: (input: CommissionSiteInput) => Promise<SiteDataProfile>; commissioningAvailable?: boolean }) {
+  const sampling = latestRun?.siteData?.fingerprint === siteData?.fingerprint ? latestRun?.operationalSampling : null;
   return (
     <div className="methodology">
       <section className="model-card-hero">
-        <div><small>MODEL CARD · ENGINE 2.6</small><h4>Transparent enough to challenge.</h4><p>Grounded is a data-calibrated decision-support prototype, not a certified engineering design tool. Every result comes from executable energy physics, measured operational profiles, correlated hazards and seeded uncertainty; every simplification is disclosed below.</p></div>
+        <div><small>MODEL CARD · ENGINE {MODEL_VERSION}</small><h4>Transparent enough to challenge.</h4><p>Grounded is a data-calibrated decision-support prototype, not a certified engineering design tool. Every result comes from executable energy accounting, measured operational profiles, correlated hazards and seeded uncertainty; every simplification is disclosed below.</p></div>
         <div className="model-card-seal"><span>{latestRun?.audit?.status === "PASS" ? "✓" : "·"}</span><strong>{latestRun?.audit?.status === "PASS" ? "Audited" : calibration?.source === "NASA_POWER" ? "Calibrated" : "Auditable"}</strong><small>{latestRun?.audit?.status ?? calibration?.status?.toUpperCase() ?? "LOADING"}</small></div>
       </section>
 
@@ -36,9 +39,13 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
       {siteData && <section className="method-section site-data-card">
         <div className="method-heading"><span>↯</span><div><small>MEASURED OPERATIONAL LAYER</small><h4>{siteData.label}</h4></div><code>{siteData.fingerprint}</code></div>
         <div className="site-data-verdict"><div><small>QUALITY GATE</small><strong>{siteData.status.replaceAll("_", " ")}</strong><p>{siteData.disclosure}</p></div><span><small>DEMAND COMPLETENESS</small><b>{siteData.quality.demandCompletenessPct.toFixed(1)}%</b></span><span><small>PV COMPLETENESS</small><b>{siteData.quality.pvCompletenessPct.toFixed(1)}%</b></span><span><small>OUTAGE HISTORY</small><b>{siteData.reliability.eventCount?.toLocaleString() ?? "ANNUAL"}</b></span></div>
+        {siteData.evidence && <div className="holdout-proof"><div><small>SEPARATE EVIDENCE DIMENSIONS</small><strong>{siteData.evidence.overall.replaceAll("_", " ")}</strong><p>{siteData.evidence.limitations.join(" ")}</p></div><span><small>LOAD</small><b>{siteData.evidence.demand}</b></span><span><small>PV</small><b>{siteData.evidence.pv}</b></span><span><small>RELIABILITY</small><b>{siteData.evidence.reliability.replaceAll("_", " ")}</b></span></div>}
+        {siteData.reliability.observationWindow && <p className="site-outage-proof"><strong>Declared continuous exposure</strong><span>{siteData.reliability.observationWindow.durationDays.toFixed(1)} days · {siteData.reliability.eventCount ?? 0} recorded outages · annualized rate {siteData.reliability.saifiInterruptionsPerCustomerYear.toFixed(2)}/year{siteData.reliability.frequencyInterval95 && ` · exact Poisson 95% interval ${siteData.reliability.frequencyInterval95.lowerInterruptionsPerYear.toFixed(2)}–${siteData.reliability.frequencyInterval95.upperInterruptionsPerYear.toFixed(2)}/year`}. Not a verified sensor-coverage or stationary-frequency guarantee.</span></p>}
         {siteData.reliability.eventCount && <p className="site-outage-proof"><strong>Observed restoration distribution</strong><span>{siteData.reliability.eventCount.toLocaleString()} events · median {siteData.reliability.medianRestorationHours?.toFixed(2)} h · P90 {siteData.reliability.p90RestorationHours?.toFixed(2)} h · P95 {siteData.reliability.p95RestorationHours?.toFixed(2)} h</span></p>}
         <div className="site-source-grid">{siteData.sources.map((source) => source.url ? <a href={source.url} target="_blank" rel="noreferrer" key={`${source.kind}-${source.url}`}><small>{source.kind} · {source.measured ? "MEASURED" : "MODELED"}</small><strong>{source.authority}</strong><p>{source.title}</p><span>{source.period} · {source.nativeResolutionMinutes ? `${source.nativeResolutionMinutes}-minute native` : source.title.includes("SAIDI") ? "annual audited indices" : "event-level history"}</span></a> : <div key={`${source.kind}-${source.fileName}`}><small>{source.kind} · COMMISSIONED FILE</small><strong>{source.authority}</strong><p>{source.title}</p><span>{source.fileName} · {source.period}</span></div>)}</div>
         <div className="profile-strip"><div><small>15-MINUTE DEMAND SHAPE</small><span>{siteData.demand.multiplier15m.map((value, index) => <i key={index} style={{ height: `${Math.max(4, Math.min(100, value / Math.max(...siteData.demand.multiplier15m) * 100))}%` }} />)}</span></div><div><small>MEASURED PV CAPACITY FACTOR</small><span>{siteData.pv.capacityFactor15m.map((value, index) => <i key={index} style={{ height: `${Math.max(4, value * 100)}%` }} />)}</span></div></div>
+        <div className="holdout-proof"><div><small>OPERATIONAL SAMPLING</small><strong>{sampling?.method.replaceAll("_", " ") ?? (siteData.empiricalDays ? "PAIRED MEASURED DAYS" : "REPEATED AVERAGE DAY")}</strong><p>{sampling?.disclosure ?? siteData.empiricalDays?.disclosure ?? "This reference contains only averaged 96-slot demand/PV curves. Raw measured-day variation and inter-day covariance are not represented."}</p></div>{siteData.empiricalDays && <><span><small>TRAINING DAYS</small><b>{siteData.empiricalDays.trainingDays}</b><em>paired demand + PV</em></span><span><small>WITHHELD DAYS</small><b>{siteData.empiricalDays.holdoutDays}</b><em>excluded from scenario draws</em></span><span><small>EXCLUDED DATES</small><b>{new Set([...siteData.empiricalDays.excludedIncompleteDemandDates, ...siteData.empiricalDays.excludedIncompletePvDates, ...siteData.empiricalDays.excludedUnpairedDates]).size}</b><em>missing, unmatched or DST</em></span></>}</div>
+        {siteData.empiricalDays && <details className="site-outage-proof"><summary>Measured-day source ledger</summary><p>{siteData.empiricalDays.classification}</p><p>Dataset SHA-256: <code>{siteData.empiricalDays.datasetSha256}</code></p><p>Withheld dates: {siteData.empiricalDays.days.filter((day) => day.partition === "HOLDOUT").map((day) => day.date).join(", ") || "none"}.</p><p>Excluded demand dates: {siteData.empiricalDays.excludedIncompleteDemandDates.join(", ") || "none"}. Excluded PV dates: {siteData.empiricalDays.excludedIncompletePvDates.join(", ") || "none"}. Unpaired dates: {siteData.empiricalDays.excludedUnpairedDates.join(", ") || "none"}.</p>{sampling && <p>Scenario source-date draws: {Object.entries(sampling.sourceDateDrawCounts).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([date, count]) => `${date} (${count})`).join(", ") || "none"}. Draw counts are repeated model uses, not independent new measurements.</p>}</details>}
         {siteData.validation && <div className={`holdout-proof ${siteData.validation.status.toLowerCase()}`}><div><small>OUT-OF-SAMPLE VALIDATION</small><strong>{siteData.validation.status}</strong><p>{siteData.validation.method}</p></div><span><small>DEMAND HOLDOUT</small><b>{siteData.validation.demand.maePct.toFixed(2)}%</b><em>MAE · {siteData.validation.demand.holdoutDays} days</em></span><span><small>PV HOLDOUT</small><b>{siteData.validation.pv.maeCapacityFactor.toFixed(3)}</b><em>capacity-factor MAE</em></span><span><small>OUTAGE HOLDOUT</small><b>{siteData.validation.outage.ksStatistic.toFixed(3)}</b><em>KS drift · {siteData.validation.outage.holdoutEvents.toLocaleString()} events</em></span></div>}
       </section>}
 
@@ -54,7 +61,7 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
         <div className="collaboration-status"><span>OUTREACH READY</span><p><strong>No partnership is claimed yet.</strong> The field packet targets the hospital operations team and Aavas Foundation for data permission, boundary confirmation and a named reviewer.</p><code>PAGES {jaipurFacilityEvidence.source.pages.join(" · ")}</code></div>
       </section>
 
-      <SiteCommissionPanel onCommission={onCommission} />
+      <SiteCommissionPanel onCommission={onCommission} available={commissioningAvailable} />
 
       {latestRun?.audit && latestRun.manifest && <section className="method-section audit-ledger">
         <div className="method-heading"><span>✓</span><div><small>LATEST RUN AUDIT</small><h4>{latestRun.audit.checks.filter((check) => check.passed).length}/{latestRun.audit.checks.length} machine checks passed</h4></div><code>{latestRun.manifest.runFingerprint}</code></div>
@@ -67,7 +74,7 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
           <ol className="evidence-chain">
             <li><b>Define</b><span>Hospital, homes, PV, battery and grid constraints</span></li>
             <li><b>Stress</b><span>Correlated 72-hour heat, cloud, demand and outage futures</span></li>
-            <li><b>Explain</b><span>Exact causal timeline for each critical failure</span></li>
+            <li><b>Explain</b><span>Dispatch-event timeline for each modeled critical failure</span></li>
             <li><b>Validate</b><span>Recommended strategy replayed on unseen futures</span></li>
           </ol>
         </section>
@@ -78,12 +85,13 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
             <p><strong>Deterministic seeds</strong><span>Identical inputs always reproduce identical outcomes.</span></p>
             <p><strong>Paired comparisons</strong><span>Before and after worlds share the same hazard seeds.</span></p>
             <p><strong>Independent search cohort</strong><span>245 strategies train on 300 non-overlapping futures across five hazards.</span></p>
-            <p><strong>Three disjoint holdouts</strong><span>The selected policy must improve all three unseen seeded cohorts.</span></p>
-            <p><strong>Exact paired inference</strong><span>McNemar's exact test measures whether prevented failures outweigh newly introduced failures without a normal approximation.</span></p>
+            <p><strong>Three disjoint holdouts</strong><span>Each unseen seed cohort must meet the declared planning target and introduce no failures for readiness. Cohort size is chosen from the target before observing outcomes.</span></p>
+            <p><strong>Seed-cluster decision bound</strong><span>A one-sided 95% exact binomial upper bound treats shared-seed hazards as one cluster and tests whether any hazard fails. It is conservative, not a bootstrap or simultaneous guarantee.</span></p>
+            <p><strong>Exact paired inference</strong><span>Seed-cluster McNemar inference tests prevented versus introduced failure clusters. A city milestone additionally requires p &lt; 0.05 in every holdout.</span></p>
             <p><strong>81-cell compound envelope</strong><span>Restoration, demand, solar and starting SOC are varied together in a full-factorial audit; the worst cell stays visible.</span></p>
             <p><strong>Pareto rank stability</strong><span>Every non-dominated finalist is rerun on each holdout; rank, winning alternative and risk regret remain visible.</span></p>
-            <p><strong>95% Wilson interval</strong><span>Risk reports include sampling uncertainty, even near 0%.</span></p>
-            <p><strong>Reliability depth</strong><span>LOLP, LOLE, EENS and CVaR95 separate frequency, duration, energy severity and tail risk.</span></p>
+            <p><strong>Diagnostic Wilson interval</strong><span>Individual-evaluation intervals remain visible; shared-seed cluster bounds govern mixed-hazard decisions.</span></p>
+            <p><strong>Reliability depth</strong><span>72-hour critical-loss probability, loss duration, unserved energy and CVaR95 separate frequency, duration, severity and tail risk. These are experiment quantities, not annual utility reliability indices.</span></p>
             <p><strong>Carbon-aware Pareto search</strong><span>Grid carbon joins risk, unserved energy, cost and disruption in dominance testing.</span></p>
             <p><strong>Interpretable ML audit</strong><span>A regularized surrogate explains simulator failures on an untouched seed holdout; it never controls dispatch or recommendations.</span></p>
           </div>
@@ -96,7 +104,7 @@ export function MethodologyPanel({ calibration, siteData, locationLabel, latestR
         <div className="source-grid">
           {sources.map((source) => <a key={source.name} href={source.href} target="_blank" rel="noreferrer"><small>{source.tag}</small><strong>{source.name}<span>↗</span></strong><p>{source.description}</p></a>)}
         </div>
-        <p className="source-disclosure"><strong>Calibration status:</strong> {calibration?.source === "NASA_POWER" ? "climate distributions are calibrated from NASA POWER climatology and cached for reproducible/offline demonstrations." : "the safe fallback uses a disclosed representative climatology because NASA POWER was unavailable."} {siteData ? "The selected operational layer uses measured public-network demand, PV and outage/restoration history; it is a verified reference cohort, not local Jaipur commissioning data." : "Operational demand, PV and outage behavior use disclosed representative engineering profiles."} Procurement still requires local meter exports and engineering review.</p>
+        <p className="source-disclosure"><strong>Calibration status:</strong> {calibration?.source === "NASA_POWER" ? "climate distributions are calibrated from NASA POWER climatology and cached for reproducible/offline demonstrations." : "the safe fallback uses a disclosed representative climatology because NASA POWER was unavailable."} {siteData?.scope === "COMMISSIONED_SITE" ? "The selected layer comes from commissioned files. Its separate load, PV and reliability quality labels describe internal checks, not independent meter or field validation. Sparse reliability retains disclosed model assumptions." : siteData ? "The selected operational layer is a public-network reference, not local Jaipur facility telemetry; its averaged curves repeat over the experiment." : "Operational demand, PV and outage behavior use disclosed representative engineering profiles."} Procurement still requires local meter exports and engineering review.</p>
       </section>
 
       <section className="method-section assumptions-section">

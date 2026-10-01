@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { capitolDistrict, inCapitolDistrict, isRoadLane, type WorldSnapshot } from "@sudo-city/protocol";
 import { buildTerrain } from "../src/reference-city/layouts/terrain";
 import { CITY_SIZE, FOREST_PLOTS, LANDMARK_SITES, RESERVE, RESERVE_STRUCTURES, insideLandmark, insideReserveStructure, reserveDistance, reserveTrail } from "../src/game/landmarks/worldLayout";
+import { CITY_PLOTS, CITY_VARIANTS, LEGACY_EVIDENCE_PLOTS, type CityProofSummary } from "@verdant/protocol/city";
+import type { Building, WorldState } from "@verdant/protocol";
+import { constructionReceipt, inspectionClickIsValid, nextEvidenceOrientation, placementClickIsValid, placementVerdict, plotAtGrid, renderedBuildingPlot } from "../src/game/evidenceCity/placementModel";
+import { evidenceVisualStyle, orientationFront } from "../src/game/evidenceCity/visualVariants";
+import { createIsoProjection, TILE_WIDTH, TILE_HEIGHT } from "../src/reference-city/math/iso";
 
 // These tests exercise the same pure terrain classifier as the reference city.
 // No renderer, DOM, canvas, or Phaser mock is required.
@@ -114,5 +119,104 @@ describe("Offshore forest and bridge", () => {
     // These were real collisions found beside the station and watchtower.
     expect(FOREST_PLOTS).not.toContainEqual([-34, 3]);
     expect(FOREST_PLOTS).not.toContainEqual([-28, 11]);
+  });
+});
+
+describe("Evidence city placement renderer contract", () => {
+  const proof: CityProofSummary = { proofIdentity: "model-proof", sourceContextKey: "reference/context", baselineRunId: "before", resultRunId: "after",
+    modelVersion: "2.7.0", calibrationFingerprint: "CLIMATE", siteDataFingerprint: "SITE", targetPct: 5,
+    baselineSampleSize: 500, resultSampleSize: 500, beforeCritical: 20, afterCritical: 0,
+    holdouts: [0, 1, 2].map((index) => ({ label: `Holdout ${index + 1}`, seedOffset: 10_000 + index * 1000, clusterCount: 60,
+      upperCriticalRiskPct: 4.9, pairedPValue: .03125, preventedFailureClusters: 6, introducedFailureClusters: 0 })),
+    compoundStressCells: 81, compoundPassingCells: 81 };
+  const world = (): WorldState => ({ trees: [], buildings: [], totalRuns: 1, totalFuturesSimulated: 500, bestImprovementPct: 0,
+    pendingMilestones: [{ id: "storage-milestone", family: "storage", level: 1, earnedAt: 1, proof }] });
+  const plan = { milestoneId: "storage-milestone", variantId: "storage-battery-pavilion", rotation: 0 as const };
+  const legacyBuilding: Building = { id: "legacy", gx: 12, gy: 12, kind: "resilienceHall", runId: "old-run", grownAt: 0, milestone: "Old record" };
+
+  it("freezes the nine authored seats on dry ground off roads and landmarks", () => {
+    expect(CITY_PLOTS).toHaveLength(9);
+    const mall = capitolDistrict(CITY_SIZE);
+    for (const plot of CITY_PLOTS) {
+      expect(terrain.cellAt(plot.gx, plot.gy)?.kind, plot.id).not.toBe("water");
+      expect(isRoadLane(plot.gx, plot.gy), plot.id).toBe(false);
+      expect(inCapitolDistrict(mall, plot.gx, plot.gy), plot.id).toBe(false);
+      expect(insideLandmark(plot.gx, plot.gy), plot.id).toBe(false);
+      expect(plotAtGrid(plot.gx, plot.gy)?.id).toBe(plot.id);
+    }
+  });
+
+  it("uses the exact original filtered legacy plot ordering", () => {
+    const staticSites = [[9,15],[1,19],[31,19],[31,7],[7,7],[21,27],[1,13],[13,7],[15,9],[33,15],[33,21],[15,27],
+      ...LANDMARK_SITES.filter((site) => site.kind !== "hospital").map((site) => [site.gx, site.gy])];
+    const mall = capitolDistrict(CITY_SIZE);
+    const candidates = [...[1,5,23,29].flatMap((y) => [1,5,7,11,13,17,19,23,25,29,31,35].map((x) => [x,y])),
+      ...Array.from({ length: 16 }, (_, index) => [1 + Math.floor(index / 2) * 6, index % 2 ? 35 : 31])];
+    const expected = candidates.filter(([x,y]) => !insideLandmark(x!,y!) && !inCapitolDistrict(mall,x!,y!)
+      && !staticSites.some(([gx,gy]) => Math.abs(gx!-x!) < 1.3 && Math.abs(gy!-y!) < 1.3));
+    expect(LEGACY_EVIDENCE_PLOTS).toEqual(expected);
+    expect(renderedBuildingPlot(legacyBuilding, 0)).toEqual({ gx: 1, gy: 1 });
+  });
+
+  it("rejects water, gaps, bounding-box corners and a pan gesture", () => {
+    expect(plotAtGrid(-12, 12)).toBeUndefined();
+    expect(plotAtGrid(1.6, 1)).toBeUndefined();
+    expect(plotAtGrid(Number.NaN, 1)).toBeUndefined();
+    expect(placementClickIsValid({ x: 10, y: 10, plotId: "storage-1" }, { x: 10, y: 10, plotId: "storage-1" })).toBe(true);
+    expect(placementClickIsValid({ x: 10, y: 10, plotId: "storage-1" }, { x: 16, y: 10, plotId: "storage-1" })).toBe(false);
+    expect(placementClickIsValid({ x: 10, y: 10, plotId: "storage-1" }, { x: 10, y: 10, plotId: "storage-2" })).toBe(false);
+    expect(placementClickIsValid(undefined, { x: 10, y: 10, plotId: "storage-1" })).toBe(false);
+    expect(placementClickIsValid({ x: 10, y: 10, plotId: "storage-1", dragged: true }, { x: 10, y: 10, plotId: "storage-1" })).toBe(false);
+    expect(inspectionClickIsValid({ x: 10, y: 10, dragged: true }, { x: 10, y: 10 })).toBe(false);
+    expect(inspectionClickIsValid({ x: 10, y: 10 }, { x: 10, y: 10 })).toBe(true);
+  });
+
+  it("inverse-projects diamond boundaries precisely rather than accepting their screen bounding boxes", () => {
+    const iso = createIsoProjection(TILE_WIDTH, TILE_HEIGHT);
+    for (const plot of CITY_PLOTS) {
+      const center = iso.project(plot.gx, plot.gy);
+      const inside = iso.unproject(center.x + 20, center.y + 5);
+      expect(plotAtGrid(inside.x, inside.y)?.id).toBe(plot.id);
+      // Within the 92×46 rectangle but outside the isometric land diamond.
+      const corner = iso.unproject(center.x + 44, center.y + 21);
+      expect(plotAtGrid(corner.x, corner.y)).toBeUndefined();
+    }
+  });
+
+  it("marks occupied legacy seats, wrong families and spent milestones unavailable", () => {
+    expect(placementVerdict(world(), plan, CITY_PLOTS[0]).eligible).toBe(true);
+    expect(placementVerdict({ ...world(), buildings: [legacyBuilding] }, plan, CITY_PLOTS[0]).eligible).toBe(false);
+    expect(placementVerdict(world(), plan, CITY_PLOTS[3]).eligible).toBe(false);
+    expect(placementVerdict({ ...world(), pendingMilestones: [] }, plan, CITY_PLOTS[0]).eligible).toBe(false);
+    expect(placementVerdict(world(), { ...plan, variantId: "not-a-design" }, CITY_PLOTS[0]).eligible).toBe(false);
+  });
+
+  it("upgrades a registered family building only in its retained seat", () => {
+    const placed: Building = { ...legacyBuilding, kind: "reservoir", family: "storage", milestoneId: "old-milestone",
+      variantId: plan.variantId, plotId: "storage-2", level: 1, rotation: 0, proof };
+    const current = { ...world(), buildings: [placed], pendingMilestones: world().pendingMilestones!.map((milestone) => ({ ...milestone, level: 2 })) };
+    expect(placementVerdict(current, plan, CITY_PLOTS[1]).eligible).toBe(true);
+    expect(placementVerdict(current, plan, CITY_PLOTS[0]).eligible).toBe(false);
+    expect(renderedBuildingPlot(placed, 0)).toEqual({ gx: 5, gy: 1 });
+    // The same-level record cannot be previewed as an eligible upgrade.
+    expect(placementVerdict({ ...world(), buildings: [placed] }, plan, CITY_PLOTS[1]).eligible).toBe(false);
+  });
+
+  it("has nine archive-backed designs and four front orientations without tipping a bitmap", () => {
+    for (const variant of CITY_VARIANTS) {
+      expect(evidenceVisualStyle(variant.id, 1)?.tier).toBe(0);
+      expect(evidenceVisualStyle(variant.id, 3)?.tier).toBe(2);
+    }
+    expect(evidenceVisualStyle("unregistered")).toBeUndefined();
+    expect([0,90,180,270].map((rotation) => orientationFront(rotation as 0|90|180|270))).toHaveLength(4);
+    expect(nextEvidenceOrientation(270)).toBe(0);
+    expect(evidenceVisualStyle(plan.variantId, 1, 90)?.facing).toBe("u");
+    expect(evidenceVisualStyle(plan.variantId, 1, 180)?.flipX).toBe(true);
+  });
+
+  it("does not create construction receipts for legacy history and versions each upgrade", () => {
+    expect(constructionReceipt(legacyBuilding)).toBeUndefined();
+    const building = { ...legacyBuilding, milestoneId: plan.milestoneId, variantId: plan.variantId, plotId: "storage-2", level: 1 };
+    expect(constructionReceipt(building)).not.toBe(constructionReceipt({ ...building, milestoneId: "next-milestone", level: 2 }));
   });
 });

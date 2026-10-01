@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { CityProofSummary, CityRotation, EvidenceFamily, EvidenceMilestone } from "./city.js";
 
 /* ============================================================================
  * Shared types between apps/server, apps/web, and every package. Mirrors
@@ -74,6 +75,14 @@ export const ScenarioResult = z.object({
   outageDurationHours: z.number(),
   cloudEventStartHour: z.number().nullable(),
   cloudEventDurationHours: z.number(),
+  profileSampling: z.object({
+    mode: z.enum(["PAIRED_EMPIRICAL_DAYS", "AVERAGE_REFERENCE_PROFILE", "REPRESENTATIVE_ENGINEERING"]),
+    method: z.enum(["CONSECUTIVE_3DAY_BLOCK", "INDEPENDENT_DAY_WITH_REPLACEMENT", "REPEATED_AVERAGE_DAY", "SYNTHETIC_PROFILES"]),
+    datasetSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    sourceDates: z.string().array().max(3),
+    dayFingerprints: z.string().array().max(3),
+    disclosure: z.string(),
+  }).optional(),
 });
 export type ScenarioResult = z.infer<typeof ScenarioResult>;
 
@@ -131,11 +140,33 @@ export const SiteDataSource = z.object({
 });
 export type SiteDataSource = z.infer<typeof SiteDataSource>;
 
+export const MeasuredSiteDay = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  demandKW: z.number().finite().nonnegative().array().length(96),
+  pvKW: z.number().finite().nonnegative().array().length(96),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  dayOfWeek: z.number().int().min(0).max(6),
+  dayType: z.enum(["WEEKDAY", "WEEKEND"]),
+  highLoad: z.boolean(),
+  lowPvOutput: z.boolean(),
+  partition: z.enum(["TRAIN", "HOLDOUT"]),
+});
+export type MeasuredSiteDay = z.infer<typeof MeasuredSiteDay>;
+
 export const SiteDataProfile = z.object({
   id: z.string(),
   label: z.string(),
   scope: z.enum(["PUBLIC_REFERENCE", "COMMISSIONED_SITE"]),
-  status: z.enum(["VERIFIED_REFERENCE", "VERIFIED_SITE", "REVIEW"]),
+  status: z.enum(["VERIFIED_REFERENCE", "VERIFIED_SITE", "PARTIALLY_VERIFIED", "REVIEW"]),
+  // Separate fitted interval evidence from outage-frequency/duration evidence.
+  // Optional for historical public references; commissioned VERIFIED_SITE requires it.
+  evidence: z.object({
+    demand: z.enum(["VERIFIED", "REVIEW"]),
+    pv: z.enum(["VERIFIED", "REVIEW"]),
+    reliability: z.enum(["VERIFIED", "INSUFFICIENT_HISTORY", "REVIEW"]),
+    overall: z.enum(["VERIFIED", "PARTIALLY_VERIFIED", "REVIEW"]),
+    limitations: z.array(z.string()),
+  }).optional(),
   demand: z.object({
     station: z.string(),
     firstDate: z.string(),
@@ -155,6 +186,18 @@ export const SiteDataProfile = z.object({
     normalizedResolutionMinutes: z.literal(15),
     capacityFactor15m: z.array(z.number().min(0).max(1)).length(96),
   }),
+  empiricalDays: z.object({
+    version: z.literal(1), resolutionMinutes: z.literal(15), timezone: z.string(),
+    inverterCapacityKW: z.number().finite().positive(), normalizationMeanDemandKW: z.number().finite().nonnegative(),
+    demandSourceSha256: z.string().regex(/^[a-f0-9]{64}$/), pvSourceSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    datasetSha256: z.string().regex(/^[a-f0-9]{64}$/),
+    days: MeasuredSiteDay.array().min(1).max(5000),
+    trainingDays: z.number().int().nonnegative(), holdoutDays: z.number().int().nonnegative(),
+    excludedIncompleteDemandDates: z.string().array().max(5000),
+    excludedIncompletePvDates: z.string().array().max(5000),
+    excludedUnpairedDates: z.string().array().max(10000),
+    classification: z.string(), disclosure: z.string(),
+  }).optional(),
   reliability: z.object({
     period: z.string(),
     saidiMinutesPerCustomerYear: z.number().nonnegative(),
@@ -170,6 +213,19 @@ export const SiteDataProfile = z.object({
     p95RestorationHours: z.number().nonnegative().optional(),
     durationQuantilesHours: z.array(z.number().nonnegative()).min(2).optional(),
     causeCounts: z.record(z.string(), z.number().int().nonnegative()).optional(),
+    observationWindow: z.object({
+      startedAt: z.string().datetime({ offset: true }),
+      endedAt: z.string().datetime({ offset: true }),
+      durationDays: z.number().positive(),
+      durationYears: z.number().positive(),
+      continuousCoverage: z.literal(true),
+    }).optional(),
+    frequencyInterval95: z.object({
+      method: z.literal("EXACT_POISSON"),
+      lowerInterruptionsPerYear: z.number().nonnegative(),
+      upperInterruptionsPerYear: z.number().positive(),
+      assumptions: z.string(),
+    }).optional(),
   }),
   sources: z.array(SiteDataSource).min(3),
   quality: z.object({
@@ -204,6 +260,69 @@ export const SiteDataProfile = z.object({
   }).optional(),
   disclosure: z.string(),
   fingerprint: z.string(),
+}).superRefine((profile, context) => {
+  const empirical = profile.empiricalDays;
+  if (empirical) {
+    const dates = empirical.days.map((day) => day.date);
+    if (new Set(dates).size !== dates.length || dates.some((date, index) => index > 0 && date <= dates[index - 1])) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["empiricalDays", "days"], message: "Paired measured days must have unique ascending local dates" });
+    }
+    if (empirical.trainingDays !== empirical.days.filter((day) => day.partition === "TRAIN").length
+      || empirical.holdoutDays !== empirical.days.filter((day) => day.partition === "HOLDOUT").length
+      || empirical.trainingDays < 1) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["empiricalDays"], message: "Measured-day train/holdout counts must match the retained day ledger, with at least one training day" });
+    }
+    empirical.days.forEach((day, index) => {
+      const calendarDate = new Date(`${day.date}T00:00:00Z`);
+      const validDate = Number.isFinite(calendarDate.valueOf()) && calendarDate.toISOString().slice(0, 10) === day.date;
+      if (!validDate || calendarDate.getUTCDay() !== day.dayOfWeek
+        || day.dayType !== (day.dayOfWeek === 0 || day.dayOfWeek === 6 ? "WEEKEND" : "WEEKDAY")
+        || day.pvKW.some((value) => value > empirical.inverterCapacityKW)) {
+        context.addIssue({ code: z.ZodIssueCode.custom, path: ["empiricalDays", "days", index], message: "Measured-day calendar metadata or inverter-capacity bound is inconsistent" });
+      }
+    });
+  }
+  const window = profile.reliability.observationWindow;
+  if (window) {
+    const elapsedDays = (Date.parse(window.endedAt) - Date.parse(window.startedAt)) / 86_400_000;
+    if (elapsedDays <= 0 || Math.abs(elapsedDays - window.durationDays) > 1e-6 || Math.abs(elapsedDays / 365.25 - window.durationYears) > 1e-9) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["reliability", "observationWindow"], message: "Observation exposure must match a positive start/end window" });
+    }
+  }
+  const interval = profile.reliability.frequencyInterval95;
+  if (interval && (interval.lowerInterruptionsPerYear > profile.reliability.saifiInterruptionsPerCustomerYear || interval.upperInterruptionsPerYear < profile.reliability.saifiInterruptionsPerCustomerYear)) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ["reliability", "frequencyInterval95"], message: "Frequency interval must contain the observed annual frequency" });
+  }
+  if (profile.scope === "COMMISSIONED_SITE" && window && profile.reliability.eventCount != null) {
+    const expectedRate = profile.reliability.eventCount / window.durationYears;
+    if (Math.abs(expectedRate - profile.reliability.saifiInterruptionsPerCustomerYear) > 1e-8 * Math.max(1, expectedRate)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["reliability", "saifiInterruptionsPerCustomerYear"], message: "Site frequency must equal completed event count divided by declared observation years" });
+    }
+  }
+  if (profile.scope === "COMMISSIONED_SITE" && profile.status === "VERIFIED_SITE") {
+    if (!window || window.durationDays < 365.25 || !interval || (profile.reliability.eventCount ?? 0) < 30 || profile.evidence?.demand !== "VERIFIED" || profile.evidence?.pv !== "VERIFIED" || profile.evidence?.reliability !== "VERIFIED" || profile.evidence?.overall !== "VERIFIED" || profile.validation?.status !== "PASS") {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["status"], message: "VERIFIED_SITE requires verified load/PV and reliability, at least one year of explicit exposure, 30 events and passing holdouts" });
+    }
+  }
+  if (profile.scope === "COMMISSIONED_SITE" && profile.evidence) {
+    const evidence = profile.evidence;
+    const expectedOverall = evidence.demand === "VERIFIED" && evidence.pv === "VERIFIED" && evidence.reliability === "VERIFIED" ? "VERIFIED" : evidence.demand === "VERIFIED" || evidence.pv === "VERIFIED" || evidence.reliability === "VERIFIED" ? "PARTIALLY_VERIFIED" : "REVIEW";
+    if (evidence.overall !== expectedOverall || profile.status !== (expectedOverall === "VERIFIED" ? "VERIFIED_SITE" : expectedOverall)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidence", "overall"], message: "Combined operational status must match its separately assessed evidence dimensions" });
+    }
+    const demandCheck = profile.validation?.demand;
+    if (evidence.demand === "VERIFIED" && (profile.quality.demandCompletenessPct < 95 || profile.demand.meanMW <= 0 || !demandCheck || demandCheck.trainDays + demandCheck.holdoutDays < 30 || demandCheck.holdoutDays < 6 || demandCheck.maePct > 15)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidence", "demand"], message: "Verified load evidence requires adequate coverage, signal and withheld-day fit" });
+    }
+    const pvCheck = profile.validation?.pv;
+    if (evidence.pv === "VERIFIED" && (profile.quality.pvCompletenessPct < 95 || !profile.pv.capacityFactor15m.some((value) => value > 0) || !pvCheck || pvCheck.trainDays + pvCheck.holdoutDays < 30 || pvCheck.holdoutDays < 6 || pvCheck.maeCapacityFactor > 0.1)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidence", "pv"], message: "Verified PV evidence requires adequate coverage, signal and withheld-day fit" });
+    }
+    const outageCheck = profile.validation?.outage;
+    if (evidence.reliability === "VERIFIED" && (!window || window.durationDays < 365.25 || !interval || (profile.reliability.eventCount ?? 0) < 30 || !outageCheck || outageCheck.holdoutEvents < 6 || outageCheck.trainEvents + outageCheck.holdoutEvents !== profile.reliability.eventCount || outageCheck.ksStatistic > 0.35)) {
+      context.addIssue({ code: z.ZodIssueCode.custom, path: ["evidence", "reliability"], message: "Verified reliability requires sufficient explicit exposure and a passing held-out duration comparison" });
+    }
+  }
 });
 export type SiteDataProfile = z.infer<typeof SiteDataProfile>;
 
@@ -308,6 +427,8 @@ export const ReproducibilityManifest = z.object({
   calibrationFingerprint: z.string(),
   siteDataFingerprint: z.string().optional(),
   deterministicReplay: z.boolean(),
+  operationalProfileMode: z.enum(["PAIRED_EMPIRICAL_DAYS", "AVERAGE_REFERENCE_PROFILE", "REPRESENTATIVE_ENGINEERING"]).optional(),
+  empiricalDatasetSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 export type ReproducibilityManifest = z.infer<typeof ReproducibilityManifest>;
 
@@ -328,6 +449,14 @@ export const RunSummary = z.object({
   metrics: RunMetrics.optional(),
   audit: RunAudit.optional(),
   manifest: ReproducibilityManifest.optional(),
+  operationalSampling: z.object({
+    mode: z.enum(["PAIRED_EMPIRICAL_DAYS", "AVERAGE_REFERENCE_PROFILE", "REPRESENTATIVE_ENGINEERING"]),
+    method: z.enum(["CONSECUTIVE_3DAY_BLOCK", "INDEPENDENT_DAY_WITH_REPLACEMENT", "REPEATED_AVERAGE_DAY", "SYNTHETIC_PROFILES"]),
+    datasetSha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    sourceDateDrawCounts: z.record(z.string(), z.number().int().nonnegative()),
+    availableTrainingDays: z.number().int().nonnegative(),
+    disclosure: z.string(),
+  }).optional(),
   createdAt: z.number(),
 });
 export type RunSummary = z.infer<typeof RunSummary>;
@@ -361,7 +490,7 @@ export type ClimateSweepResult = z.infer<typeof ClimateSweepResult>;
  * here the thing that grows is the community's demonstrated resilience.
  * ---------------------------------------------------------------------- */
 
-export const GrowthKind = z.enum(["tree.planted", "building.grown", "tree.withered"]);
+export const GrowthKind = z.enum(["tree.planted", "building.grown", "building.upgraded", "milestone.earned", "tree.withered"]);
 export type GrowthKind = z.infer<typeof GrowthKind>;
 
 /** Species/tier communicate at a glance how good the run that caused them was. */
@@ -389,6 +518,9 @@ export const Building = z.object({
   grownAt: z.number(),
   runId: z.string(),
   milestone: z.string(),
+  milestoneId: z.string().optional(), family: EvidenceFamily.optional(), variantId: z.string().optional(),
+  plotId: z.string().optional(), rotation: CityRotation.optional(), level: z.number().int().min(1).max(3).optional(),
+  proof: CityProofSummary.optional(),
 });
 export type Building = z.infer<typeof Building>;
 
@@ -397,6 +529,7 @@ export const GrowthEvent = z.object({
   runId: z.string(),
   tree: Tree.optional(),
   building: Building.optional(),
+  pendingMilestone: EvidenceMilestone.optional(),
   message: z.string(),
 });
 export type GrowthEvent = z.infer<typeof GrowthEvent>;
@@ -407,6 +540,8 @@ export const WorldState = z.object({
   totalRuns: z.number(),
   totalFuturesSimulated: z.number(),
   bestImprovementPct: z.number(),
+  pendingMilestones: z.array(EvidenceMilestone).optional(),
+  cityProofReceipts: z.array(z.string()).optional(),
 });
 export type WorldState = z.infer<typeof WorldState>;
 
@@ -423,6 +558,7 @@ export const ClientMessage = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("optimize"),
     runId: z.string(),
+    riskTargetPct: z.number().finite().gt(0).max(100).default(5),
   }),
 ]);
 export type ClientMessage = z.infer<typeof ClientMessage>;

@@ -175,6 +175,9 @@ importers:
       '@verdant/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@verdant/sim':
+        specifier: workspace:*
+        version: link:../sim
     devDependencies:
       '@types/node':
         specifier: ^22.10.0

@@ -4,6 +4,12 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./evidence": "./src/evidence.ts",
+    "./requests": "./src/requests.ts",
+    "./city": "./src/city.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

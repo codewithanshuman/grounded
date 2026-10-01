@@ -1,8 +1,9 @@
 import { capitolDistrict, inCapitolDistrict, type Building as CityBuilding, type WorldSnapshot } from "@sudo-city/protocol";
-import type { Building, Tree, WorldState } from "@verdant/protocol";
+import type { Building, GrowthEvent, Tree, WorldState } from "@verdant/protocol";
+import { CITY_PLOTS, LEGACY_EVIDENCE_PLOTS as SHARED_LEGACY_PLOTS } from "@verdant/protocol/city";
 import Phaser from "phaser";
 import { WorldScene } from "../reference-city/WorldScene";
-import { FOCUS_ZOOM, MIN_ZOOM, projection } from "../reference-city/world/core/worldConstants";
+import { CLICK_SLOP, FOCUS_ZOOM, MIN_ZOOM, projection } from "../reference-city/world/core/worldConstants";
 import { TILE_ANCHOR_Y } from "../reference-city/textures/core";
 import { propTextureKey } from "../reference-city/textures/props";
 import { prefersReducedMotion } from "../reference-city/systems/ambient";
@@ -21,6 +22,12 @@ import { addNorthernDistrict } from "./districts/NorthernDistrict";
 import { NORTHERN_MAINLAND, northernShoreline } from "./districts/expansionLayout";
 import { addNorthCityBridge } from "./districts/NorthCityBridge";
 import { onNorthCityApproach } from "./districts/northBridgeModel";
+import { bakeBuilding } from "../reference-city/textures/buildings";
+import { EvidenceCityPlacement, type EvidencePlacementHandlers } from "./evidenceCity/EvidenceCityPlacement";
+import { EvidenceConstruction, type EvidenceConstructionStatus } from "./evidenceCity/EvidenceConstruction";
+import { catalogPlotFor, evidenceVariant, inspectionClickIsValid, renderedBuildingPlot, type EvidenceBuildPlan } from "./evidenceCity/placementModel";
+import { evidenceVisualStyle, orientationFront } from "./evidenceCity/visualVariants";
+import { isCanvasPointer } from "../reference-city/world/utils/pointerUtils";
 
 const CITY_WIDTH = CITY_SIZE.width;
 const CITY_HEIGHT = CITY_SIZE.height;
@@ -70,18 +77,10 @@ const FACILITY_LABELS: Record<string, string> = {
   "facility/grid-intertie": "GRID INTERTIE",
 };
 
-const LEGACY_EVIDENCE_PLOTS: ReadonlyArray<readonly [number, number]> = [
-  [1, 1], [5, 1], [7, 1], [11, 1], [13, 1], [17, 1], [19, 1], [23, 1], [25, 1], [29, 1], [31, 1], [35, 1],
-  [1, 5], [5, 5], [7, 5], [11, 5], [13, 5], [17, 5], [19, 5], [23, 5], [25, 5], [29, 5], [31, 5], [35, 5],
-  [1, 23], [5, 23], [7, 23], [11, 23], [13, 23], [17, 23], [19, 23], [23, 23], [25, 23], [29, 23], [31, 23], [35, 23],
-  [1, 29], [5, 29], [7, 29], [11, 29], [13, 29], [17, 29], [19, 29], [23, 29], [25, 29], [29, 29], [31, 29], [35, 29],
-];
-
 const mall = capitolDistrict(CITY_SIZE);
 const occupied = (x: number, y: number) => insideLandmark(x,y) || inCapitolDistrict(mall,x,y)
   || STATIC_BUILDINGS.some(b => Math.abs(b.plot.x-x) < 1.3 && Math.abs(b.plot.y-y) < 1.3);
-const EVIDENCE_PLOTS = [...LEGACY_EVIDENCE_PLOTS, ...Array.from({length: 16}, (_,i) => [1+Math.floor(i/2)*6, i%2 ? 35 : 31] as const)]
-  .filter(([x,y]) => !occupied(x,y));
+const EVIDENCE_PLOTS = SHARED_LEGACY_PLOTS;
 const NEIGHBOURHOODS: CityBuilding[] = [];
 for (const y of [1,5,7,11,25,29,31]) for (const x of [1,5,13,17,19,23,25,29,31,35,43,47]) {
   if (occupied(x,y) || EVIDENCE_PLOTS.some(([a,b])=>a===x&&b===y) || (x>=43&&y<19)) continue;
@@ -106,11 +105,20 @@ export class GroundedCityScene extends WorldScene {
   private currentView: CityView = "city";
   private railway?: RailSystem;
   private railStatusHandler?: (status: RailStatus) => void;
+  private buildPlan: EvidenceBuildPlan | null = null;
+  private placement?: EvidenceCityPlacement;
+  private placementHandlers: EvidencePlacementHandlers = {};
+  private evidenceConstruction?: EvidenceConstruction;
+  private constructionStatusHandler?: (status: EvidenceConstructionStatus[]) => void;
+  private evidenceFrontages = new Map<string, Phaser.GameObjects.Graphics>();
+  private inspectionPress?: { x: number; y: number; pointerId: number; dragged: boolean };
 
   constructor() {
     super();
     this.setSelectionListener((building) => this.inspectBuilding(building));
   }
+
+  preload(): void { this.load.image(`crew:${workerUrl}`, workerUrl); }
 
   override create(): void {
     super.create();
@@ -120,7 +128,24 @@ export class GroundedCityScene extends WorldScene {
     bakeTextures(this);
     bakeArchitecture(this);
     bakeEnergy(this);
+    this.placement = new EvidenceCityPlacement(this, () => this.latestWorld, () => this.terrainManager.terrain);
+    this.placement.setHandlers(this.placementHandlers);
+    this.placement.setPlan(this.buildPlan);
+    this.evidenceConstruction = new EvidenceConstruction(this, `crew:${workerUrl}`);
+    this.evidenceConstruction.setStatusHandler(this.constructionStatusHandler);
+    this.input.on("pointerdown", this.noteInspectionPress);
+    this.input.on("pointermove", this.noteInspectionTravel);
+    this.input.on("pointerup", this.clearInspectionPress);
+    this.input.on("pointerupoutside", this.clearInspectionPress);
     this.events.once("shutdown", () => {
+      this.input.off("pointerdown", this.noteInspectionPress);
+      this.input.off("pointermove", this.noteInspectionTravel);
+      this.input.off("pointerup", this.clearInspectionPress);
+      this.input.off("pointerupoutside", this.clearInspectionPress);
+      this.inspectionPress = undefined;
+      this.placement?.destroy(); this.placement = undefined;
+      this.evidenceConstruction?.destroy(); this.evidenceConstruction = undefined;
+      this.evidenceFrontages.forEach((frontage) => frontage.destroy()); this.evidenceFrontages.clear();
       this.forestReserveObjects.forEach(object => this.tweens.killTweensOf(object));
       this.forestReserveObjects = [];
       this.reserveBuilt = false;
@@ -135,11 +160,57 @@ export class GroundedCityScene extends WorldScene {
     this.inspectHandler = handler;
   }
 
+  private noteInspectionPress = (pointer: Phaser.Input.Pointer): void => {
+    if (!isCanvasPointer(pointer) || pointer.rightButtonDown()) return;
+    if (this.inspectionPress && this.inspectionPress.pointerId !== pointer.id) {
+      this.inspectionPress.dragged = true;
+      return;
+    }
+    this.inspectionPress = { x: pointer.x, y: pointer.y, pointerId: pointer.id, dragged: false };
+    // During placement every drag pans, even when it starts on an old building.
+    if (this.buildPlan) this.cameraController.setPressedBuilding(undefined);
+  };
+  private noteInspectionTravel = (pointer: Phaser.Input.Pointer): void => {
+    const press = this.inspectionPress;
+    if (press?.pointerId === pointer.id && Math.hypot(pointer.x - press.x, pointer.y - press.y) > CLICK_SLOP) press.dragged = true;
+  };
+  private clearInspectionPress = (pointer: Phaser.Input.Pointer): void => {
+    if (this.inspectionPress?.pointerId === pointer.id) this.inspectionPress = undefined;
+  };
+  private emitInspection(inspection: ForestInspection): void {
+    const pointer = this.input.activePointer;
+    if (this.buildPlan || !pointer || !isCanvasPointer(pointer) || this.inspectionPress?.pointerId !== pointer.id
+      || !inspectionClickIsValid(this.inspectionPress, pointer, CLICK_SLOP)) return;
+    this.inspectHandler?.(inspection);
+  }
+
+  setPlacementHandlers(handlers: EvidencePlacementHandlers): void { this.placementHandlers = handlers; this.placement?.setHandlers(handlers); }
+  setConstructionStatusHandler(handler?: (status: EvidenceConstructionStatus[]) => void): void {
+    this.constructionStatusHandler = handler; this.evidenceConstruction?.setStatusHandler(handler);
+  }
+  setBuildPlan(plan: EvidenceBuildPlan | null): void {
+    const newlySelected = !!plan && plan.milestoneId !== this.buildPlan?.milestoneId;
+    this.buildPlan = plan;
+    this.placement?.setPlan(plan);
+    if (newlySelected && this.latestWorld && this.scene?.isActive()) {
+      const variant = evidenceVariant(plan.variantId);
+      const plots = CITY_PLOTS.filter((plot) => (plot.families as readonly string[]).includes(variant?.family ?? ""));
+      if (plots.length) {
+        const gx = plots.reduce((sum, plot) => sum + plot.gx, 0) / plots.length;
+        const point = projection.project(gx, 1);
+        this.cameraController.noteCameraInput();
+        if (prefersReducedMotion()) {
+          this.cameraController.zoomTarget = .9; this.cameras.main.setZoom(.9).centerOn(point.x, point.y - 35);
+        } else this.cameraController.moveCameraTo(point.x, point.y - 35, .9);
+      }
+    }
+  }
+
   setRailStatusHandler(handler?: (status: RailStatus) => void): void { this.railStatusHandler = handler; this.railway?.setStatusHandler(handler); }
   setRailPaused(paused: boolean): void { this.railway?.setPaused(paused); }
   setRailSpeed(speed: number): void { this.railway?.setSpeed(speed); }
 
-  setGroundedWorld(world: WorldState): void {
+  setGroundedWorld(world: WorldState, growthEvents: GrowthEvent[] = []): void {
     this.latestWorld = world;
     const snapshot = snapshotFor(world);
     super.setWorld(snapshot, "main", "grounded-jaipur");
@@ -152,18 +223,27 @@ export class GroundedCityScene extends WorldScene {
     this.drawForestReserve();
     if (!this.northBuilt) {
       this.northBuilt = true;
-      this.northernObjects.push(...addNorthernDistrict(this, (title, evidence) => this.inspectHandler?.(contextInspection(title, evidence))), ...addNorthCityBridge(this));
+      this.northernObjects.push(...addNorthernDistrict(this, (title, evidence) => this.emitInspection(contextInspection(title, evidence))), ...addNorthCityBridge(this));
     }
     if (!this.railway) {
-      this.railway = new RailSystem(this, (title, evidence) => this.inspectHandler?.(contextInspection(title, evidence)));
+      this.railway = new RailSystem(this, (title, evidence) => this.emitInspection(contextInspection(title, evidence)));
       this.railway.setStatusHandler(this.railStatusHandler);
     }
     this.drawSignatureFacilities();
+    this.drawEvidenceVariants(world);
     this.clearLandmarkProps();
     this.expandCameraBounds();
     this.syncEvidenceTrees(world.trees, this.hasHydratedWorld);
     this.syncFacilityLabels();
     this.applyActivity();
+    if (!this.hasHydratedWorld) this.evidenceConstruction?.hydrate(world.buildings);
+    else for (const event of growthEvents) {
+      if ((event.kind !== "building.grown" && event.kind !== "building.upgraded") || !event.building?.milestoneId) continue;
+      const building = world.buildings.find((candidate) => candidate.id === event.building!.id && candidate.milestoneId === event.building!.milestoneId);
+      const view = building && this.buildingManager.getViews().get(evidenceBuildingPath(building));
+      if (building && view) this.evidenceConstruction?.start(building, view.sprite);
+    }
+    this.placement?.refresh();
     this.hasHydratedWorld = true;
   }
 
@@ -188,7 +268,10 @@ export class GroundedCityScene extends WorldScene {
       const {x,y}=projection.unproject(prop.x,prop.y-TILE_ANCHOR_Y);
       const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
       const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
-      if (insideLandmark(x,y)||approach||energy||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5)) prop.setVisible(false);
+      // Planned evidence seats remain legible before construction. This clears
+      // only decorative scatter, never the run-linked trees in the reserve.
+      const evidenceSeat=CITY_PLOTS.some(plot=>Math.abs(plot.gx-x)<.6&&Math.abs(plot.gy-y)<.6);
+      if (insideLandmark(x,y)||approach||energy||evidenceSeat||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5)) prop.setVisible(false);
     }
   }
 
@@ -276,7 +359,7 @@ export class GroundedCityScene extends WorldScene {
       structure.setScale(scale);
       label.setVisible(false);
     });
-    structure.on("pointerup", () => this.inspectHandler?.(contextInspection(title, evidence)));
+    structure.on("pointerup", () => this.emitInspection(contextInspection(title, evidence)));
     if (!prefersReducedMotion()) this.tweens.add({ targets: pulse, y: pulse.y - 10, alpha: .95, duration: 1_150, yoyo: true, repeat: -1, ease: "Sine.InOut" });
     this.forestReserveObjects.push(structure, label, pulse);
   }
@@ -306,6 +389,35 @@ export class GroundedCityScene extends WorldScene {
     }
   }
 
+  private drawEvidenceVariants(world: WorldState): void {
+    const seen = new Set<string>();
+    for (const building of world.buildings) {
+      const plot = catalogPlotFor(building);
+      const style = building.variantId ? evidenceVisualStyle(building.variantId, building.level ?? 1, building.rotation ?? 0) : undefined;
+      if (!plot || !style) continue;
+      const view = this.buildingManager.getViews().get(evidenceBuildingPath(building));
+      if (!view) continue;
+      seen.add(building.id);
+      const baked = bakeBuilding(this, style.archetype, style.tier, style.language, style.facing);
+      if (view.sprite.texture.key !== baked.key) view.sprite.setTexture(baked.key);
+      view.sprite.setFlipX(style.flipX).setData("evidenceMilestoneId", building.milestoneId);
+      view.sprite.setInteractive({ pixelPerfect: true, useHandCursor: true });
+      // Four front orientations are represented in the ground-entry marker.
+      // Archive facades use authored u/v faces plus mirroring, not a fake
+      // screen-space 90-degree rotation that would tip the building sideways.
+      let frontage = this.evidenceFrontages.get(building.id);
+      if (!frontage) { frontage = this.add.graphics(); this.evidenceFrontages.set(building.id, frontage); }
+      const front = orientationFront(building.rotation ?? 0);
+      const point = projection.project(plot.gx + front.gx, plot.gy + front.gy);
+      const tangent = front.gx ? { x: -12, y: 6 } : { x: 12, y: 6 };
+      frontage.clear().setDepth(view.sprite.depth + .5).fillStyle(style.accent, .9).lineStyle(1, 0xffffff, .8)
+        .fillPoints([{ x: point.x - tangent.x, y: point.y - tangent.y }, { x: point.x + tangent.x, y: point.y + tangent.y },
+          { x: point.x + front.gx * 15 - front.gy * 15, y: point.y + (front.gx + front.gy) * 7 }], true)
+        .strokePoints([{ x: point.x - tangent.x, y: point.y - tangent.y }, { x: point.x + tangent.x, y: point.y + tangent.y }], false);
+    }
+    for (const [id, frontage] of this.evidenceFrontages) if (!seen.has(id)) { frontage.destroy(); this.evidenceFrontages.delete(id); }
+  }
+
   setActivity(activity: ForestActivity): void {
     this.activity = activity;
     this.applyActivity();
@@ -321,24 +433,25 @@ export class GroundedCityScene extends WorldScene {
   }
 
   private inspectBuilding(building?: CityBuilding): void {
-    if (!building) return;
+    if (!building || this.buildPlan) return;
     const dynamic = this.latestWorld?.buildings.find((candidate) => evidenceBuildingPath(candidate) === building.path);
     if (dynamic) {
-      this.inspectHandler?.({
+      this.emitInspection({
         kind: "building",
-        title: buildingName(dynamic),
-        status: "Verified resilience milestone",
+        title: evidenceVariant(dynamic.variantId ?? "")?.label ?? buildingName(dynamic),
+        status: dynamic.milestoneId ? "Model milestone — open evidence certificate" : "Legacy growth record",
         evidence: dynamic.milestone,
         runId: dynamic.runId,
         occurredAt: dynamic.grownAt,
+        milestoneId: dynamic.milestoneId,
       });
       return;
     }
     const context = STATIC_INSPECTIONS[building.path];
-    if (context) this.inspectHandler?.(context);
+    if (context) this.emitInspection(context);
     else {
       const landmark=LANDMARK_SITES.find(site=>site.path===building.path);
-      this.inspectHandler?.(contextInspection(landmark?.title ?? "City neighbourhood", "Illustrative city architecture. It is not a surveyed Jaipur building and does not add an independently simulated service."));
+      this.emitInspection(contextInspection(landmark?.title ?? "City neighbourhood", "Illustrative city architecture. It is not a surveyed Jaipur building and does not add an independently simulated service."));
     }
   }
 
@@ -366,11 +479,11 @@ export class GroundedCityScene extends WorldScene {
         .setInteractive({ useHandCursor: true });
       if (tree.species === "flowering") sprite.setTint(0xf0c1cc);
       sprite.setData("evidenceTree", true);
-      sprite.on("pointerup", () => this.inspectHandler?.({
+      sprite.on("pointerup", () => this.emitInspection({
         kind: "tree",
         title: `${titleCase(tree.species)} evidence tree`,
-        status: "Verified simulation",
-        evidence: "Planted only after a completed, reproducible resilience run.",
+        status: "Audited simulation record",
+        evidence: "Records model work, not a real planted tree. Current growth requires a completed audited, reproducible resilience run; legacy history is retained.",
         runId: tree.runId,
         occurredAt: tree.plantedAt,
       }));
@@ -484,12 +597,13 @@ export class GroundedCityScene extends WorldScene {
 
 function snapshotFor(world: WorldState): WorldSnapshot {
   const evidenceBuildings = world.buildings.map((building, index) => {
-    const [x, y] = EVIDENCE_PLOTS[index % EVIDENCE_PLOTS.length]!;
+    const {gx: x, gy: y} = renderedBuildingPlot(building, index);
+    const style = building.variantId ? evidenceVisualStyle(building.variantId, building.level ?? 1, building.rotation ?? 0) : undefined;
     return cityBuilding(
       evidenceBuildingPath(building),
       "verified-evidence",
-      languageFor(building),
-      1100 + index * 280,
+      style?.language ?? languageFor(building),
+      style?.loc ?? 1100 + index * 280,
       x,
       y,
     );
@@ -497,7 +611,7 @@ function snapshotFor(world: WorldState): WorldSnapshot {
   return {
     id: "grounded-jaipur",
     repoPath: "grounded/jaipur-resilience",
-    revision: `${world.totalRuns}:${world.buildings.length}:${world.trees.length}`,
+    revision: `${world.totalRuns}:${world.trees.length}:${world.buildings.map((building) => `${building.id}:${building.milestoneId ?? "legacy"}:${building.level ?? 0}:${building.variantId ?? building.kind}:${building.rotation ?? 0}`).join("|")}`,
     generatedAt: new Date().toISOString(),
     size: { width: CITY_WIDTH, height: CITY_HEIGHT },
     layoutVersion: 2,
@@ -516,7 +630,7 @@ function cityBuilding(path: string, district: string, language: string, loc: num
 }
 
 function evidenceBuildingPath(building: Building): string {
-  return `evidence/${building.kind}/${building.id}`;
+  return building.milestoneId ? `evidence/milestone/${building.id}` : `evidence/${building.kind}/${building.id}`;
 }
 
 function languageFor(building: Building): string {

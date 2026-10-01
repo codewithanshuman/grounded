@@ -9,12 +9,12 @@ import type { ClimateCalibration, ClimateMonth, Intervention, LocationId, Microg
 
 export const DT = 0.25; // hours per simulated step
 export const STEPS = 288; // 72h / 15min: three-day compound-event horizon
-export const MODEL_VERSION = "2.6.0";
+export const MODEL_VERSION = "2.8.0";
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
   if (value && typeof value === "object") {
-    return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)).map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;
+    return `{${Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;
   }
   return JSON.stringify(value);
 }
@@ -270,6 +270,63 @@ export function locationWithSiteData(base: LocationDef, siteData?: SiteDataProfi
   return siteData ? { ...base, siteData } : base;
 }
 
+type EmpiricalDay = NonNullable<SiteDataProfile["empiricalDays"]>["days"][number];
+type OperationalSampling = NonNullable<RunSummary["operationalSampling"]>;
+const measuredPoolCache = new WeakMap<NonNullable<SiteDataProfile["empiricalDays"]>, { days: EmpiricalDay[]; blocks: EmpiricalDay[][] }>();
+function measuredDayPool(siteData?: SiteDataProfile) {
+  const data = siteData?.empiricalDays;
+  if (!data) return null;
+  let pool = measuredPoolCache.get(data);
+  if (!pool) {
+    const days = data.days.filter((day) => day.partition === "TRAIN");
+    const byDate = new Map(days.map((day) => [day.date, day]));
+    const blocks = days.map((day) => Array.from({ length: 3 }, (_, index) => byDate.get(new Date(Date.parse(`${day.date}T00:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10))))
+      .filter((block): block is EmpiricalDay[] => block.every((day) => !!day));
+    pool = { days, blocks };
+    measuredPoolCache.set(data, pool);
+  }
+  return pool.days.length ? pool : null;
+}
+
+/** A separate deterministic stream keeps measured-day selection identical for
+ * every intervention and hazard evaluated on the same seed. Never draw load
+ * and PV independently, and never draw from measured validation dates. */
+export function sampleMeasuredDays(seed: number, siteData?: SiteDataProfile): EmpiricalDay[] {
+  const pool = measuredDayPool(siteData);
+  if (!pool) return [];
+  const rng = mulberry32((seed ^ 0x50414952) >>> 0);
+  return pool.blocks.length ? pool.blocks[Math.floor(rng() * pool.blocks.length)]
+    : Array.from({ length: 3 }, () => pool.days[Math.floor(rng() * pool.days.length)]);
+}
+
+function samplingDescription(siteData?: SiteDataProfile): OperationalSampling {
+  const pool = measuredDayPool(siteData);
+  return pool ? {
+    mode: "PAIRED_EMPIRICAL_DAYS", method: pool.blocks.length ? "CONSECUTIVE_3DAY_BLOCK" : "INDEPENDENT_DAY_WITH_REPLACEMENT",
+    datasetSha256: siteData!.empiricalDays!.datasetSha256, availableTrainingDays: pool.days.length, sourceDateDrawCounts: {},
+    disclosure: `${siteData!.empiricalDays!.disclosure} ${pool.blocks.length ? `${pool.blocks.length} complete consecutive 72-hour training blocks available; block starts sampled uniformly.` : "No consecutive three-day training block available: paired days sampled independently with replacement; inter-day persistence is not preserved."} Battery SOC is continuous across all 288 steps.`,
+  } : {
+    mode: siteData ? "AVERAGE_REFERENCE_PROFILE" : "REPRESENTATIVE_ENGINEERING", method: siteData ? "REPEATED_AVERAGE_DAY" : "SYNTHETIC_PROFILES",
+    availableTrainingDays: 0, sourceDateDrawCounts: {},
+    disclosure: siteData ? "Only an averaged 96-slot operational profile is available. It is repeated over 72 hours with simulated stress; raw measured-day variability and paired inter-day covariance are not represented." : "Representative engineering load and solar profiles, not sampled measured telemetry.",
+  };
+}
+
+/** Public references stay reference-calibrated. Sparse commissioned histories
+ * must not silently turn zero/one observed outages into reliable site risk.
+ * Keep their metered load/PV shapes but use disclosed preset/config assumptions
+ * for frequency/restoration until reliability evidence is independently usable. */
+export function usesMeasuredReliability(siteData?: SiteDataProfile): boolean {
+  if (!siteData) return false;
+  if (siteData.scope === "PUBLIC_REFERENCE") return true;
+  const reliability = siteData.reliability;
+  const validation = siteData.validation?.outage;
+  return siteData.evidence?.reliability === "VERIFIED" && (reliability?.observationWindow?.durationDays ?? 0) >= 365.25
+    && (reliability.eventCount ?? 0) >= 30 && !!reliability.frequencyInterval95
+    && siteData.validation?.status === "PASS" && !!validation && validation.trainEvents > 0 && validation.holdoutEvents >= 6
+    && validation.trainEvents + validation.holdoutEvents === reliability.eventCount && validation.ksStatistic <= 0.35;
+}
+
 export const DEFAULT_CONFIG: MicrogridConfig = {
   solarCapacityKW: 1800,
   batteryCapacityKWh: 12000,
@@ -309,6 +366,9 @@ export interface SimStep {
   curtailedSolarKW: number;
   energyBalanceErrorKWh: number;
   failed: boolean;
+  sourceDate?: string;
+  measuredDemandKW?: number;
+  measuredPvKW?: number;
 }
 
 export interface DetailedResult extends ScenarioResult {
@@ -316,7 +376,7 @@ export interface DetailedResult extends ScenarioResult {
 }
 
 /**
- * One simulated 24h future. Priority every step is: hospital first (solar ->
+ * One simulated 72h future. Priority every step is: hospital first (solar ->
  * grid -> battery, battery may dip into its emergency reserve), then
  * non-critical residential+EV load (solar -> grid -> battery down to the
  * reserve floor). Critical shortfall is recorded at every step so reliability
@@ -332,6 +392,8 @@ export function simulateScenario(
 ): DetailedResult {
   const P = PRESETS[presetId];
   const rng = mulberry32(seed);
+  const measuredDays = sampleMeasuredDays(seed, location.siteData);
+  const measuredData = measuredDays.length ? location.siteData!.empiricalDays! : undefined;
   const Emax = config.batteryCapacityKWh;
   let E = Emax * (config.batteryStartPct / 100);
   const physicalFloor = Emax * (config.batteryMinSocPct / 100);
@@ -346,8 +408,9 @@ export function simulateScenario(
   const cloudEvent = rng() < P.cloudEventProb;
   const cloudEventStart = 8 + rng() * 48;
   const cloudEventDur = 5 + rng() * 16;
-  const measured72HourOutageProbability = location.siteData
-    ? 1 - Math.exp(-(location.siteData.reliability.saifiInterruptionsPerCustomerYear * 72) / (365.25 * 24))
+  const measuredReliability = usesMeasuredReliability(location.siteData) ? location.siteData?.reliability : undefined;
+  const measured72HourOutageProbability = measuredReliability
+    ? 1 - Math.exp(-(measuredReliability.saifiInterruptionsPerCustomerYear * 72) / (365.25 * 24))
     : null;
   const outageProbability = measured72HourOutageProbability == null
     ? P.outageProbBase
@@ -355,13 +418,13 @@ export function simulateScenario(
   const outageOccurs = rng() < clamp(outageProbability * (0.65 + severity), 0, 0.97);
   const outageStart = P.stormSolarFactor < 1 && cloudEvent ? cloudEventStart + rng() * 3 : 10 + rng() * 48;
   const restorationU = rng();
-  const observedRestoration = location.siteData?.reliability.durationQuantilesHours;
+  const observedRestoration = measuredReliability?.durationQuantilesHours;
   const observedIndex = observedRestoration ? restorationU * (observedRestoration.length - 1) : 0;
   const observedLower = observedRestoration ? Math.floor(observedIndex) : 0;
   const observedFraction = observedIndex - observedLower;
   const baseRestorationHours = observedRestoration
     ? observedRestoration[observedLower] * (1 - observedFraction) + observedRestoration[Math.min(observedRestoration.length - 1, observedLower + 1)] * observedFraction
-    : -Math.log(Math.max(1e-6, 1 - restorationU)) * (location.siteData?.reliability.meanRestorationHours ?? config.gridRestorationMeanHours);
+    : -Math.log(Math.max(1e-6, 1 - restorationU)) * (measuredReliability?.meanRestorationHours ?? config.gridRestorationMeanHours);
   const restorationStressMultiplier = observedRestoration
     ? (0.75 + severity * 0.5) * (P.stormSolarFactor < 1 ? 1.35 : 1)
     : (0.7 + severity * 1.4) * (P.stormSolarFactor < 1 ? 1.45 : 1);
@@ -406,12 +469,16 @@ export function simulateScenario(
     if (cloudEvent) cloud += (0.92 - cloudBase) * gaussian(hour, cloudEventStart + cloudEventDur / 2, cloudEventDur / 3);
     cloud = clamp(cloud, 0, 0.97);
 
-    const measuredPvFactor = location.siteData?.pv.capacityFactor15m[t % 96];
+    const measuredDay = measuredDays[dayIndex];
+    const measuredPvFactor = measuredDay && measuredData ? measuredDay.pvKW[t % 96] / measuredData.inverterCapacityKW : location.siteData?.pv.capacityFactor15m[t % 96];
     const irr = measuredPvFactor == null
       ? (dayHour < 5.5 || dayHour > 19.5 ? 0 : gaussian(dayHour, 12.5, 3.2) * location.irradianceScale)
-      : measuredPvFactor * location.irradianceScale;
+      : measuredPvFactor * (measuredDay ? 1 : location.irradianceScale);
     const estimatedCellTemp = temp + 20 * Math.min(1, irr);
-    const tempEff = Math.max(0.65, 1 - Math.max(0, estimatedCellTemp - 25) * 0.0042) * P.panelDerate;
+    // Metered AC generation already contains historical temperature/inverter
+    // losses. Apply only the specified counterfactual panel derate, not those
+    // physical losses a second time.
+    const tempEff = (measuredDay ? 1 : Math.max(0.65, 1 - Math.max(0, estimatedCellTemp - 25) * 0.0042)) * P.panelDerate;
     const measuredCloudAdjustment = measuredPvFactor == null ? 1 - cloud : clamp(1 - Math.max(0, cloud - cloudBase) * 0.9, 0.08, 1);
     const solarKW = config.solarCapacityKW * Math.max(0, irr * measuredCloudAdjustment) * P.stormSolarFactor * tempEff;
     solarEnergyKWh += solarKW * DT;
@@ -419,15 +486,17 @@ export function simulateScenario(
     const gridOnline = !(outageOccurs && hour >= outageStart && hour <= outageStart + outageDur);
     const gridCapE = (gridOnline ? config.gridMaxImportKW : 0) * DT;
 
-    const resFactor = location.siteData?.demand.multiplier15m[t % 96]
+    const resFactor = (measuredDay && measuredData ? measuredDay.demandKW[t % 96] / Math.max(1e-9, measuredData.normalizationMeanDemandKW) : location.siteData?.demand.multiplier15m[t % 96])
       ?? 0.55 + 0.25 * gaussian(dayHour, 8, 1.4) + 0.35 * gaussian(dayHour, 19.5, 2.0);
-    const acFactor = (1 + Math.max(0, temp - 24) * 0.025) * P.acBoost;
+    const baselineTemp = location.baseTemp - 4 + 9 * gaussian(dayHour, 15, 4.5);
+    const acFactor = (1 + Math.max(0, temp - 24) * 0.025) * P.acBoost / (measuredDay ? 1 + Math.max(0, baselineTemp - 24) * 0.025 : 1);
     let resKW = config.homesCount * config.avgHomeKW * resFactor * acFactor;
     if (intervention.precoolHour != null) {
       if (dayHour >= intervention.precoolHour && dayHour < intervention.precoolHour + 1.5) resKW *= 1.18;
       if (dayHour >= 15 && dayHour <= 18.5) resKW *= 0.85;
     }
-    resKW *= 0.95 + rng() * 0.1;
+    const residentialNoise = 0.95 + rng() * 0.1;
+    if (!measuredDay) resKW *= residentialNoise;
 
     const evFactor = 0.05 + 0.55 * gaussian(dayHour, evPeakHour, 1.6);
     const evKW = evCount * config.evChargerKW * evFactor;
@@ -533,6 +602,7 @@ export function simulateScenario(
         curtailedSolarKW: curtailedSolarE / DT,
         energyBalanceErrorKWh,
         failed: stepFailed,
+        ...(measuredDay ? { sourceDate: measuredDay.date, measuredDemandKW: measuredDay.demandKW[t % 96], measuredPvKW: measuredDay.pvKW[t % 96] } : {}),
       });
     }
   }
@@ -552,6 +622,12 @@ export function simulateScenario(
     avoidedGridCarbonKg, hazardSeverity: severity,
     outageStartHour: outageOccurs ? outageStart : null, outageDurationHours: outageDur,
     cloudEventStartHour: cloudEvent ? cloudEventStart : null, cloudEventDurationHours: cloudEvent ? cloudEventDur : 0,
+    profileSampling: {
+      mode: measuredDays.length ? "PAIRED_EMPIRICAL_DAYS" : location.siteData ? "AVERAGE_REFERENCE_PROFILE" : "REPRESENTATIVE_ENGINEERING",
+      method: measuredDays.length ? (measuredDayPool(location.siteData)!.blocks.length ? "CONSECUTIVE_3DAY_BLOCK" : "INDEPENDENT_DAY_WITH_REPLACEMENT") : location.siteData ? "REPEATED_AVERAGE_DAY" : "SYNTHETIC_PROFILES",
+      datasetSha256: measuredData?.datasetSha256, sourceDates: measuredDays.map((day) => day.date), dayFingerprints: measuredDays.map((day) => day.fingerprint),
+      disclosure: measuredDays.length ? "Paired measured training days; counterfactual stress overlays and configured capacity scaling remain modeled." : "No raw measured-day sampling; repeated average or representative profile.",
+    },
     steps,
   };
 }
@@ -566,6 +642,7 @@ export interface MonteCarloResult {
   causeCounts: Record<string, number>;
   failures: ScenarioResult[];
   surrogate: RiskSurrogate;
+  operationalSampling: OperationalSampling;
   metrics: {
     meanFlexibleUnservedKWh: number;
     meanCriticalUnservedKWh: number;
@@ -611,6 +688,7 @@ export function runMonteCarlo(
   const counts = { safe: 0, moderate: 0, high: 0, critical: 0 };
   const causeCounts: Record<string, number> = {};
   const failures: ScenarioResult[] = [];
+  const operationalSampling = samplingDescription(location.siteData);
   let totalFlexibleUnservedKWh = 0;
   let totalCriticalUnservedKWh = 0;
   let totalOperationalCost = 0;
@@ -633,6 +711,7 @@ export function runMonteCarlo(
   const surrogateObservations: SurrogateObservation[] = [];
   for (let i = 0; i < n; i++) {
     const r = simulateScenario(seedFor(i + seedOffset), location, preset, config, intervention, false);
+    r.profileSampling?.sourceDates.forEach((date) => { operationalSampling.sourceDateDrawCounts[date] = (operationalSampling.sourceDateDrawCounts[date] ?? 0) + 1; });
     counts[r.bucket]++;
     if (r.bucket === "high" || r.bucket === "critical") {
       causeCounts[r.cause] = (causeCounts[r.cause] ?? 0) + 1;
@@ -691,6 +770,7 @@ export function runMonteCarlo(
   const deterministicReplay = evidenceFingerprint(replayA) === evidenceFingerprint(replayB);
   return {
     n, location, preset, config, intervention, counts, causeCounts, failures,
+    operationalSampling,
     surrogate: trainRiskSurrogate(surrogateObservations),
     metrics: {
       meanFlexibleUnservedKWh: round1(totalFlexibleUnservedKWh / n),
@@ -763,14 +843,16 @@ export function analyzeSensitivity(
   const combinedCriticalPct = combined ? (combined.counts.critical / sampleSize) * 100 : baselineCriticalPct;
   const additiveExpectedPct = baselineCriticalPct + (factorA?.deltaCriticalPct ?? 0) + (factorB?.deltaCriticalPct ?? 0);
   return {
-    method: "Paired deterministic stress sensitivity with a second-order interaction replay for the two dominant drivers",
+    method: total > 0
+      ? "Paired counterfactual model sensitivity with a second-order interaction replay for the two largest tested increments"
+      : "Paired counterfactual model sensitivity: no dominant risk driver detected under tested perturbations",
     sampleSize,
     baselineCriticalPct: Math.round(baselineCriticalPct * 10) / 10,
     factors: deltas.map((item) => ({
       ...item,
-      contributionPct: total > 0 ? Math.round((item.deltaCriticalPct / total) * 1000) / 10 : Math.round((100 / deltas.length) * 10) / 10,
+      contributionPct: total > 0 ? Math.round((item.deltaCriticalPct / total) * 1000) / 10 : 0,
     })).sort((a, b) => b.contributionPct - a.contributionPct),
-    interaction: factorA && factorB ? {
+    interaction: total > 0 && factorA && factorB ? {
       factorAId: factorA.id,
       factorALabel: factorA.label,
       factorBId: factorB.id,
@@ -792,6 +874,99 @@ export const RESERVE_OPTS = [0, 5, 10, 15, 20, 25, 30];
 export const DELAY_OPTS = [0, 30, 60, 90, 120, 150, 180];
 export const PRECOOL_OPTS: (number | null)[] = [null, 11, 11.75, 12.75, 13.5];
 
+export interface SeedClusterObservation {
+  seedIndex: number;
+  evaluationCount: number;
+  criticalCount: number;
+}
+
+export interface ClusterUncertainty {
+  method: "seed-cluster-any-failure-exact-binomial";
+  confidenceLevel: 0.95;
+  boundType: "one-sided";
+  evaluationCount: number;
+  hazardCount: number;
+  clusterCount: number;
+  criticalClusterCount: number;
+  criticalEvaluationCount: number;
+  incompleteClusterCount: number;
+  observedCriticalPct: number;
+  upperCriticalRiskPct: number;
+  clusters: SeedClusterObservation[];
+}
+
+/** Exact one-sided Clopper-Pearson upper limit, inverted in log space.
+ * https://itl.nist.gov/div898/software/dataplot/refman2/auxillar/exacbino.htm
+ * A cluster fails if ANY shared-seed hazard fails. Its probability dominates
+ * the mean risk over those hazards without treating them as independent.
+ * This assumes independent seed clusters under the simulator, not field data. */
+export function seedClusterRiskUpperBound(failures: number, total: number, confidenceLevel = 0.95): number {
+  if (!Number.isInteger(total) || total <= 0 || !Number.isInteger(failures) || failures < 0 || failures > total
+    || !Number.isFinite(confidenceLevel) || confidenceLevel <= 0 || confidenceLevel >= 1) return 100;
+  if (failures === total) return 100;
+  const alpha = 1 - confidenceLevel;
+  if (failures === 0) return -Math.expm1(Math.log(alpha) / total) * 100;
+  const logCombinations: number[] = [0];
+  for (let index = 1; index <= failures; index++) {
+    logCombinations.push(logCombinations[index - 1] + Math.log(total - index + 1) - Math.log(index));
+  }
+  const cdf = (probability: number) => {
+    const logP = Math.log(probability);
+    const logQ = Math.log1p(-probability);
+    const terms = logCombinations.map((coefficient, index) => coefficient + index * logP + (total - index) * logQ);
+    const maximum = Math.max(...terms);
+    return Math.exp(maximum) * terms.reduce((sum, term) => sum + Math.exp(term - maximum), 0);
+  };
+  let lower = failures / total;
+  let upper = 1;
+  for (let iteration = 0; iteration < 60; iteration++) {
+    const middle = (lower + upper) / 2;
+    if (cdf(middle) > alpha) lower = middle; else upper = middle;
+  }
+  return upper * 100;
+}
+
+export function summarizeSeedClusters(clusters: SeedClusterObservation[], hazardCount: number): ClusterUncertainty {
+  const evaluationCount = clusters.reduce((sum, cluster) => sum + cluster.evaluationCount, 0);
+  const criticalEvaluationCount = clusters.reduce((sum, cluster) => sum + cluster.criticalCount, 0);
+  // A partially evaluated last seed is not evidence of survival of all hazards.
+  // Treat its unobserved hazards pessimistically for the conservative bound.
+  const incompleteClusterCount = clusters.filter((cluster) => cluster.evaluationCount < hazardCount).length;
+  const criticalClusterCount = clusters.filter((cluster) => cluster.criticalCount > 0 || cluster.evaluationCount < hazardCount).length;
+  return {
+    method: "seed-cluster-any-failure-exact-binomial", confidenceLevel: 0.95, boundType: "one-sided",
+    evaluationCount, hazardCount, clusterCount: clusters.length, criticalClusterCount, criticalEvaluationCount,
+    incompleteClusterCount, observedCriticalPct: evaluationCount ? criticalEvaluationCount / evaluationCount * 100 : 0,
+    upperCriticalRiskPct: seedClusterRiskUpperBound(criticalClusterCount, clusters.length),
+    clusters: clusters.map((cluster) => ({ ...cluster })),
+  };
+}
+
+/** Recompute persisted bounds from their integer seed ledger, never trust a
+ * rounded confidence label or a legacy unclustered Wilson interval. */
+export function validateClusterUncertainty(evidence: ClusterUncertainty | undefined, expected: {
+  evaluationCount: number; hazardCount: number; seedOffset: number; criticalEvaluationCount: number;
+}): boolean {
+  if (!evidence || evidence.method !== "seed-cluster-any-failure-exact-binomial" || evidence.confidenceLevel !== 0.95
+    || evidence.boundType !== "one-sided" || !Array.isArray(evidence.clusters)
+    || !Number.isInteger(expected.evaluationCount) || expected.evaluationCount <= 0
+    || !Number.isInteger(expected.hazardCount) || expected.hazardCount <= 0
+    || !Number.isInteger(expected.seedOffset) || expected.seedOffset < 0
+    || !Number.isInteger(expected.criticalEvaluationCount) || expected.criticalEvaluationCount < 0
+    || expected.criticalEvaluationCount > expected.evaluationCount
+    || evidence.clusters.length !== Math.ceil(expected.evaluationCount / expected.hazardCount)) return false;
+  if (!evidence.clusters.every((cluster, index) => cluster.seedIndex === expected.seedOffset + index
+    && cluster.evaluationCount === Math.min(expected.hazardCount, expected.evaluationCount - index * expected.hazardCount)
+    && Number.isInteger(cluster.criticalCount) && cluster.criticalCount >= 0 && cluster.criticalCount <= cluster.evaluationCount)) return false;
+  const computed = summarizeSeedClusters(evidence.clusters, expected.hazardCount);
+  const fields: Array<keyof Omit<ClusterUncertainty, "clusters" | "method" | "boundType">> = [
+    "evaluationCount", "hazardCount", "clusterCount", "criticalClusterCount", "criticalEvaluationCount", "incompleteClusterCount",
+    "observedCriticalPct", "upperCriticalRiskPct",
+  ];
+  return computed.criticalEvaluationCount === expected.criticalEvaluationCount
+    && fields.every((field) => Number.isFinite(evidence[field]) && Math.abs(evidence[field] - computed[field]) < 1e-9);
+}
+
 export interface StrategyCandidate {
   intervention: Intervention;
   criticalCount: number;
@@ -802,6 +977,7 @@ export interface StrategyCandidate {
   meanUnservedKWh: number;
   meanOperationalCost: number;
   meanCarbonKg: number;
+  clusterUncertainty: ClusterUncertainty;
 }
 
 export interface OptimizationSearch {
@@ -812,6 +988,10 @@ export interface OptimizationSearch {
   hazardCount: number;
   frontier: StrategyCandidate[];
   selectionReason: string;
+  riskTargetPct: number;
+  selectionMode: "TARGET_FEASIBLE_MINIMAL_DISRUPTION" | "TARGET_UNRESOLVED_RISK_FIRST";
+  feasibleStrategyCount: number;
+  discoveryOnly: true;
 }
 
 export interface ValidationCohort {
@@ -827,6 +1007,13 @@ export interface ValidationCohort {
   pairedNetBenefitPct: number;
   pairedPValue: number;
   afterWilsonHighPct: number;
+  clusterUncertainty: ClusterUncertainty;
+  pairedClusterSampleSize: number;
+  preventedFailureClusters: number;
+  introducedFailureClusters: number;
+  persistentFailureClusters: number;
+  pairedClusterPValue: number;
+  targetMet: boolean;
   passed: boolean;
 }
 
@@ -878,6 +1065,8 @@ export interface DecisionStabilityCohort {
   recommendedRiskPct: number;
   bestRiskPct: number;
   riskRegretPct: number;
+  targetMet: boolean;
+  selectionMode: OptimizationSearch["selectionMode"];
 }
 
 export interface DecisionStabilityAudit {
@@ -892,6 +1081,7 @@ export interface DecisionStabilityAudit {
 }
 
 export interface OptimizerValidation {
+  riskTargetPct: number;
   cohortCount: number;
   passedCohorts: number;
   recommendationStable: boolean;
@@ -909,16 +1099,17 @@ export interface OptimizerValidation {
 /** Exact two-sided McNemar test over discordant paired outcomes. This asks
  * whether prevented and introduced failures are plausibly symmetric without
  * assuming a normal approximation. */
-function exactMcNemarPValue(preventedFailures: number, introducedFailures: number): number {
+export function exactMcNemarPValue(preventedFailures: number, introducedFailures: number): number {
+  if (![preventedFailures, introducedFailures].every((count) => Number.isInteger(count) && count >= 0)) return 1;
   const discordant = preventedFailures + introducedFailures;
   if (discordant === 0) return 1;
   const lowerTail = Math.min(preventedFailures, introducedFailures);
-  let probability = Math.pow(0.5, discordant);
-  let cumulative = probability;
+  const logProbabilities = [-discordant * Math.LN2];
   for (let index = 1; index <= lowerTail; index++) {
-    probability *= (discordant - index + 1) / index;
-    cumulative += probability;
+    logProbabilities.push(logProbabilities[index - 1] + Math.log(discordant - index + 1) - Math.log(index));
   }
+  const maximum = Math.max(...logProbabilities);
+  const cumulative = Math.exp(maximum) * logProbabilities.reduce((sum, logProbability) => sum + Math.exp(logProbability - maximum), 0);
   return Math.min(1, cumulative * 2);
 }
 
@@ -929,25 +1120,52 @@ function pairedCriticalTransitions(
   sampleSize: number,
   seedOffset: number,
   hazards: PresetId[],
-): { beforeCritical: number; afterCritical: number; preventedFailures: number; introducedFailures: number; persistentFailures: number } {
+): { beforeCritical: number; afterCritical: number; preventedFailures: number; introducedFailures: number; persistentFailures: number;
+  clusterUncertainty: ClusterUncertainty; pairedClusterSampleSize: number; preventedFailureClusters: number;
+  introducedFailureClusters: number; persistentFailureClusters: number } {
   let beforeCritical = 0;
   let afterCritical = 0;
   let preventedFailures = 0;
   let introducedFailures = 0;
   let persistentFailures = 0;
+  const afterClusters: SeedClusterObservation[] = [];
+  const beforeClusters: SeedClusterObservation[] = [];
   for (let index = 0; index < sampleSize; index++) {
     const hazard = hazards[index % hazards.length] ?? hazards[0] ?? "extreme";
     const cohortIndex = Math.floor(index / hazards.length) + seedOffset;
     const seed = seedFor(cohortIndex);
     const beforeFailed = simulateScenario(seed, location, hazard, config, DEFAULT_INTERVENTION, false).failed;
     const afterFailed = simulateScenario(seed, location, hazard, config, intervention, false).failed;
+    const clusterIndex = Math.floor(index / hazards.length);
+    afterClusters[clusterIndex] ??= { seedIndex: cohortIndex, evaluationCount: 0, criticalCount: 0 };
+    beforeClusters[clusterIndex] ??= { seedIndex: cohortIndex, evaluationCount: 0, criticalCount: 0 };
+    afterClusters[clusterIndex].evaluationCount++;
+    beforeClusters[clusterIndex].evaluationCount++;
+    if (afterFailed) afterClusters[clusterIndex].criticalCount++;
+    if (beforeFailed) beforeClusters[clusterIndex].criticalCount++;
     if (beforeFailed) beforeCritical++;
     if (afterFailed) afterCritical++;
     if (beforeFailed && !afterFailed) preventedFailures++;
     else if (!beforeFailed && afterFailed) introducedFailures++;
     else if (beforeFailed && afterFailed) persistentFailures++;
   }
-  return { beforeCritical, afterCritical, preventedFailures, introducedFailures, persistentFailures };
+  let pairedClusterSampleSize = 0;
+  let preventedFailureClusters = 0;
+  let introducedFailureClusters = 0;
+  let persistentFailureClusters = 0;
+  for (let index = 0; index < afterClusters.length; index++) {
+    // Partial clusters cannot supply a paired survival verdict for all hazards.
+    if (afterClusters[index].evaluationCount !== hazards.length) continue;
+    pairedClusterSampleSize++;
+    const beforeFailed = beforeClusters[index].criticalCount > 0;
+    const afterFailed = afterClusters[index].criticalCount > 0;
+    if (beforeFailed && !afterFailed) preventedFailureClusters++;
+    else if (!beforeFailed && afterFailed) introducedFailureClusters++;
+    else if (beforeFailed && afterFailed) persistentFailureClusters++;
+  }
+  return { beforeCritical, afterCritical, preventedFailures, introducedFailures, persistentFailures,
+    clusterUncertainty: summarizeSeedClusters(afterClusters, hazards.length), pairedClusterSampleSize,
+    preventedFailureClusters, introducedFailureClusters, persistentFailureClusters };
 }
 
 function evaluateAcrossHazards(
@@ -963,10 +1181,15 @@ function evaluateAcrossHazards(
   let totalUnservedKWh = 0;
   let totalOperationalCost = 0;
   let totalCarbonKg = 0;
+  const clusters: SeedClusterObservation[] = [];
   for (let i = 0; i < sampleSize; i++) {
     const hazard = hazards[i % hazards.length] ?? hazards[0] ?? "extreme";
     const cohortIndex = Math.floor(i / hazards.length) + seedOffset;
     const result = simulateScenario(seedFor(cohortIndex), location, hazard, config, intervention, false);
+    const clusterIndex = Math.floor(i / hazards.length);
+    clusters[clusterIndex] ??= { seedIndex: cohortIndex, evaluationCount: 0, criticalCount: 0 };
+    clusters[clusterIndex].evaluationCount++;
+    if (result.failed) clusters[clusterIndex].criticalCount++;
     if (result.bucket === "critical") criticalCount++;
     else if (result.bucket === "high") highCount++;
     totalUnservedKWh += result.shedEnergyKWh + result.criticalEnergyUnservedKWh;
@@ -982,6 +1205,7 @@ function evaluateAcrossHazards(
     meanUnservedKWh: Math.round((totalUnservedKWh / sampleSize) * 10) / 10,
     meanOperationalCost: Math.round((totalOperationalCost / sampleSize) * 100) / 100,
     meanCarbonKg: Math.round((totalCarbonKg / sampleSize) * 10) / 10,
+    clusterUncertainty: summarizeSeedClusters(clusters, hazards.length),
   };
 }
 
@@ -999,15 +1223,28 @@ function interventionLabel(intervention: Intervention): string {
   return `R${intervention.reservePct} · D${intervention.evDelayMin} · P${precool}`;
 }
 
-function rankCandidates(candidates: StrategyCandidate[]): StrategyCandidate[] {
-  return [...candidates].sort((left, right) =>
+/** Target-feasible discovery candidates first, then the least intervention.
+ * Discovery bounds are pointwise, not selection-adjusted proof: independent
+ * untouched clusters must challenge the chosen policy before decision support. */
+export function rankCandidates(candidates: StrategyCandidate[], riskTargetPct = 5): StrategyCandidate[] {
+  const targetValid = Number.isFinite(riskTargetPct) && riskTargetPct > 0 && riskTargetPct <= 100;
+  const feasible = (candidate: StrategyCandidate) => targetValid && candidate.clusterUncertainty.upperCriticalRiskPct <= riskTargetPct;
+  return [...candidates].sort((left, right) => {
+    if (feasible(left) !== feasible(right)) return feasible(left) ? -1 : 1;
+    if (feasible(left)) return left.disruptionScore - right.disruptionScore
+      || left.meanOperationalCost - right.meanOperationalCost
+      || left.meanCarbonKg - right.meanCarbonKg
+      || left.meanUnservedKWh - right.meanUnservedKWh
+      || left.criticalCount - right.criticalCount
+      || left.highCount - right.highCount;
+    return left.clusterUncertainty.upperCriticalRiskPct - right.clusterUncertainty.upperCriticalRiskPct ||
     left.criticalCount - right.criticalCount ||
     left.highCount - right.highCount ||
     left.meanUnservedKWh - right.meanUnservedKWh ||
     left.meanOperationalCost - right.meanOperationalCost ||
     left.meanCarbonKg - right.meanCarbonKg ||
-    left.disruptionScore - right.disruptionScore,
-  );
+    left.disruptionScore - right.disruptionScore;
+  });
 }
 
 /**
@@ -1023,7 +1260,11 @@ export function analyzeInterventions(
   sampleSize: number,
   seedOffset = 0,
   hazardSet: PresetId[] = [preset],
+  riskTargetPct = 5,
 ): OptimizationSearch {
+  if (!Number.isInteger(sampleSize) || sampleSize <= 0 || !Number.isInteger(seedOffset) || seedOffset < 0
+    || hazardSet.length === 0 || new Set(hazardSet).size !== hazardSet.length
+    || !Number.isFinite(riskTargetPct) || riskTargetPct <= 0 || riskTargetPct > 100) throw new Error("Invalid optimizer cohort or planning target");
   const candidates: StrategyCandidate[] = [];
   for (const reservePct of RESERVE_OPTS) {
     for (const evDelayMin of DELAY_OPTS) {
@@ -1034,14 +1275,7 @@ export function analyzeInterventions(
     }
   }
 
-  const ranked = [...candidates].sort((a, b) =>
-    a.criticalCount - b.criticalCount ||
-    a.highCount - b.highCount ||
-    a.meanUnservedKWh - b.meanUnservedKWh ||
-    a.meanOperationalCost - b.meanOperationalCost ||
-    a.meanCarbonKg - b.meanCarbonKg ||
-    a.disruptionScore - b.disruptionScore,
-  );
+  const ranked = rankCandidates(candidates, riskTargetPct);
   const frontier = candidates
     .filter((candidate) => !candidates.some((other) =>
       other !== candidate &&
@@ -1056,6 +1290,8 @@ export function analyzeInterventions(
     .slice(0, 12);
 
   const best = ranked[0];
+  const feasibleStrategyCount = candidates.filter((candidate) => candidate.clusterUncertainty.upperCriticalRiskPct <= riskTargetPct).length;
+  const selectionMode = feasibleStrategyCount > 0 ? "TARGET_FEASIBLE_MINIMAL_DISRUPTION" as const : "TARGET_UNRESOLVED_RISK_FIRST" as const;
   return {
     best,
     evaluatedStrategies: candidates.length,
@@ -1063,7 +1299,10 @@ export function analyzeInterventions(
     seedOffset,
     hazardCount: hazardSet.length,
     frontier: frontier.some((candidate) => candidate === best) ? frontier : [best, ...frontier].slice(0, 12),
-    selectionReason: `Lowest critical failure count (${best.criticalCount}), then high-risk count (${best.highCount}), unserved energy, operating cost, grid carbon, and disruption across ${hazardSet.length} hazards.`,
+    riskTargetPct, selectionMode, feasibleStrategyCount, discoveryOnly: true,
+    selectionReason: feasibleStrategyCount > 0
+      ? `Discovery target ${riskTargetPct}% met by ${feasibleStrategyCount}/245 strategies using the conservative shared-seed cluster upper bound. Selected the least disruption, then operating cost and grid carbon. Independent validation is still required; discovery bounds are not adjusted for adaptive selection.`
+      : `Discovery target ${riskTargetPct}% unresolved: no strategy's conservative shared-seed cluster upper bound meets it. Risk-first fallback minimizes that bound, critical/high failures, unserved energy, cost, carbon and disruption; not a target-supported recommendation.`,
   };
 }
 
@@ -1078,7 +1317,11 @@ export function validateIntervention(
   sampleSize = 300,
   hazards: PresetId[] = PRESET_ORDER,
   challengerInterventions: Intervention[] = [],
+  riskTargetPct = 5,
 ): OptimizerValidation {
+  if (!Number.isInteger(sampleSize) || sampleSize <= 0 || !Number.isInteger(seedOffset) || seedOffset < 0
+    || hazards.length === 0 || new Set(hazards).size !== hazards.length
+    || !Number.isFinite(riskTargetPct) || riskTargetPct <= 0 || riskTargetPct > 100) throw new Error("Invalid validation cohort or planning target");
   const cohorts: ValidationCohort[] = [];
   const stride = Math.ceil(sampleSize / hazards.length) + 17;
   for (let index = 0; index < 3; index++) {
@@ -1101,6 +1344,13 @@ export function validateIntervention(
       pairedNetBenefitPct: Math.round(((paired.preventedFailures - paired.introducedFailures) / sampleSize) * 1000) / 10,
       pairedPValue: exactMcNemarPValue(paired.preventedFailures, paired.introducedFailures),
       afterWilsonHighPct: afterInterval.highPct,
+      clusterUncertainty: paired.clusterUncertainty,
+      pairedClusterSampleSize: paired.pairedClusterSampleSize,
+      preventedFailureClusters: paired.preventedFailureClusters,
+      introducedFailureClusters: paired.introducedFailureClusters,
+      persistentFailureClusters: paired.persistentFailureClusters,
+      pairedClusterPValue: exactMcNemarPValue(paired.preventedFailureClusters, paired.introducedFailureClusters),
+      targetMet: paired.clusterUncertainty.upperCriticalRiskPct <= riskTargetPct,
       passed: paired.afterCritical <= paired.beforeCritical && paired.preventedFailures >= paired.introducedFailures,
     });
   }
@@ -1219,7 +1469,7 @@ export function validateIntervention(
       sampleSize,
       cohort.seedOffset,
       hazards,
-    )));
+    )), riskTargetPct);
     const recommendedRank = ranked.findIndex((candidate) => sameIntervention(candidate.intervention, intervention)) + 1;
     const recommended = ranked[recommendedRank - 1];
     const winner = ranked[0];
@@ -1232,6 +1482,8 @@ export function validateIntervention(
       recommendedRiskPct: recommended.riskPct,
       bestRiskPct: winner.riskPct,
       riskRegretPct: Math.round(Math.max(0, recommended.riskPct - winner.riskPct) * 10) / 10,
+      targetMet: recommended.clusterUncertainty.upperCriticalRiskPct <= riskTargetPct,
+      selectionMode: winner.clusterUncertainty.upperCriticalRiskPct <= riskTargetPct ? "TARGET_FEASIBLE_MINIMAL_DISRUPTION" : "TARGET_UNRESOLVED_RISK_FIRST",
     };
   });
   const firstPlaceCohorts = decisionCohorts.filter((cohort) => cohort.recommendedRank === 1).length;
@@ -1244,11 +1496,12 @@ export function validateIntervention(
     topThreeCohorts,
     meanRank: Math.round((decisionCohorts.reduce((sum, cohort) => sum + cohort.recommendedRank, 0) / decisionCohorts.length) * 10) / 10,
     maxRiskRegretPct,
-    stable: topThreeCohorts === decisionCohorts.length && maxRiskRegretPct <= 1,
+    stable: topThreeCohorts === decisionCohorts.length && decisionCohorts.every((cohort) => cohort.targetMet),
     cohorts: decisionCohorts,
   };
   const passedCohorts = cohorts.filter((cohort) => cohort.passed).length;
   return {
+    riskTargetPct,
     cohortCount: cohorts.length,
     passedCohorts,
     recommendationStable: passedCohorts === cohorts.length && shockStable && jointStressEnvelope.passingCells === jointStressEnvelope.evaluatedCells,
@@ -1258,7 +1511,7 @@ export function validateIntervention(
     assumptionShocks: shocks.map((shock) => shock.label),
     shockResults,
     zeroRegressionCohorts: cohorts.filter((cohort) => cohort.introducedFailures === 0).length,
-    statisticallyResolvedCohorts: cohorts.filter((cohort) => cohort.pairedPValue < 0.05).length,
+    statisticallyResolvedCohorts: cohorts.filter((cohort) => cohort.pairedClusterPValue < 0.05).length,
     jointStressEnvelope,
     decisionStability,
   };
@@ -1269,8 +1522,9 @@ export function optimizeIntervention(
   preset: PresetId,
   config: MicrogridConfig,
   sampleSize: number,
+  riskTargetPct = 5,
 ): Intervention {
-  return analyzeInterventions(location, preset, config, sampleSize).best.intervention;
+  return analyzeInterventions(location, preset, config, sampleSize, 0, [preset], riskTargetPct).best.intervention;
 }
 
 export interface FailureExplanation {
@@ -1389,9 +1643,11 @@ export function toRunSummary(runId: string, mc: MonteCarloResult, calibration?: 
   ];
   if (siteData) checks.push({
     id: "site_data",
-    label: "Measured operational profile passed quality gates",
-    passed: siteData.quality.demandCompletenessPct >= 95 && siteData.quality.pvCompletenessPct >= 95 && siteData.demand.completeSlots === 96 && siteData.status !== "REVIEW" && (siteData.validation?.status ?? "PASS") === "PASS" && (siteData.scope === "COMMISSIONED_SITE" || siteData.reliability.eventCount == null || siteData.reliability.eventCount >= 100),
-    value: `${siteData.quality.demandCompletenessPct.toFixed(1)}% demand · ${siteData.quality.pvCompletenessPct.toFixed(1)}% PV${siteData.reliability.eventCount ? ` · ${siteData.reliability.eventCount.toLocaleString()} outages` : ""}${siteData.validation ? ` · holdout ${siteData.validation.status}` : ""}`,
+    label: "Measured load/PV profiles passed interval-quality gates",
+    passed: siteData.quality.demandCompletenessPct >= 95 && siteData.quality.pvCompletenessPct >= 95 && siteData.demand.completeSlots === 96 && siteData.status !== "REVIEW" && (siteData.scope === "COMMISSIONED_SITE"
+      ? siteData.evidence?.demand === "VERIFIED" && siteData.evidence?.pv === "VERIFIED"
+      : (siteData.validation?.status ?? "PASS") === "PASS" && (siteData.reliability.eventCount == null || siteData.reliability.eventCount >= 100)),
+    value: `${siteData.quality.demandCompletenessPct.toFixed(1)}% demand · ${siteData.quality.pvCompletenessPct.toFixed(1)}% PV${siteData.reliability.eventCount ? ` · ${siteData.reliability.eventCount.toLocaleString()} outages` : ""} · ${usesMeasuredReliability(siteData) ? "reference/site reliability applied" : "reliability unresolved: preset frequency/config restoration assumptions applied"}`,
   });
   const manifestInput = {
     modelVersion: MODEL_VERSION,
@@ -1403,6 +1659,9 @@ export function toRunSummary(runId: string, mc: MonteCarloResult, calibration?: 
     seedOffset,
     calibrationFingerprint: calibration?.fingerprint ?? "REFERENCE",
     siteDataFingerprint: siteData?.fingerprint ?? "REPRESENTATIVE_MODEL",
+    // Include actual trajectories, not just a caller-supplied source label.
+    empiricalDays: siteData?.empiricalDays,
+    operationalSampling: mc.operationalSampling,
   };
   return {
     runId,
@@ -1416,6 +1675,7 @@ export function toRunSummary(runId: string, mc: MonteCarloResult, calibration?: 
     failures: mc.failures,
     calibration,
     siteData,
+    operationalSampling: mc.operationalSampling,
     sensitivity,
     surrogate: mc.surrogate,
     metrics: mc.metrics,
@@ -1437,6 +1697,8 @@ export function toRunSummary(runId: string, mc: MonteCarloResult, calibration?: 
       calibrationFingerprint: calibration?.fingerprint ?? "REFERENCE",
       siteDataFingerprint: siteData?.fingerprint,
       deterministicReplay: mc.audit.deterministicReplay,
+      operationalProfileMode: mc.operationalSampling.mode,
+      empiricalDatasetSha256: mc.operationalSampling.datasetSha256,
     },
     createdAt: Date.now(),
   };

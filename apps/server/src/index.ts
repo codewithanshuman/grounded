@@ -16,6 +16,9 @@ import { openWorld } from "@verdant/world";
 import { z } from "zod";
 import { loadClimateCalibration } from "./climate.js";
 import { CommissionSiteBody, createCommissionedSiteProfile, loadCommissionedProfiles, persistCommissionedProfile } from "./site-data.js";
+import { PlacementRequest } from "@verdant/protocol/city";
+import { SimulationRequest, SweepRequest, OptimizationRequest, validationCohortSize } from "@verdant/protocol/requests";
+import { assessOptimizationGrowth } from "@verdant/sim/growth";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.VERDANT_DB_PATH ?? "./verdant-forest.db";
@@ -49,13 +52,7 @@ function broadcast(msg: ServerMessage) {
   }
 }
 
-const SimulateBody = z.object({
-  location: LocationIdSchema,
-  preset: PresetIdSchema,
-  config: MicrogridConfigSchema,
-  scenarioCount: z.number().min(100).max(20000),
-  siteDataProfileId: z.string().default(measuredReference.id),
-});
+const SimulateBody = SimulationRequest;
 
 app.get("/api/world", async () => world.getState());
 app.get("/api/health", async () => ({ status: "ok", engine: MODEL_VERSION, profiles: siteProfiles.size, timestamp: new Date().toISOString() }));
@@ -63,7 +60,7 @@ app.get("/api/site-data/profiles", async () => ({
   profiles: [...siteProfiles.values()],
   representativeModel: { id: "representative-model", label: "Representative engineering profiles" },
 }));
-app.post("/api/site-data/commission", async (req, reply) => {
+app.post("/api/site-data/commission", { config: { rateLimit: { max: 3, timeWindow: "1 minute" } } }, async (req, reply) => {
   const parsed = CommissionSiteBody.safeParse(req.body);
   if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
   try {
@@ -83,7 +80,7 @@ app.get("/api/calibration/:location", async (req, reply) => {
   return loadClimateCalibration(parsed.data);
 });
 
-app.post("/api/simulate", async (req, reply) => {
+app.post("/api/simulate", { config: { rateLimit: { max: 12, timeWindow: "1 minute" } } }, async (req, reply) => {
   const parsed = SimulateBody.safeParse(req.body);
   if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
   const { location, preset, config, scenarioCount, siteDataProfileId } = parsed.data;
@@ -96,6 +93,7 @@ app.post("/api/simulate", async (req, reply) => {
   const sensitivity = analyzeSensitivity(calibratedLocation, preset, config, Math.min(300, scenarioCount));
   const summary = toRunSummary(randomUUID(), mc, calibration, sensitivity, 0, siteData);
   runs.set(summary.runId, summary);
+  world.saveRun(summary); // REVIEW outcomes remain evidence, even without growth.
 
   const growthEvents = world.recordRun(summary);
   broadcast({ type: "run.completed", summary });
@@ -105,16 +103,11 @@ app.post("/api/simulate", async (req, reply) => {
   return { summary, growthEvents };
 });
 
-const SweepBody = z.object({
-  location: LocationIdSchema,
-  config: MicrogridConfigSchema,
-  scenarioCount: z.number().min(100).max(2000).default(500),
-  siteDataProfileId: z.string().default(measuredReference.id),
-});
+const SweepBody = SweepRequest;
 
 /** Runs one seeded population through every climate regime. Because each row
  * reuses the same seeds, differences are caused by the hazard—not sample luck. */
-app.post("/api/climate-sweep", async (req, reply) => {
+app.post("/api/climate-sweep", { config: { rateLimit: { max: 6, timeWindow: "1 minute" } } }, async (req, reply) => {
   const parsed = SweepBody.safeParse(req.body);
   if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
   const { location, config, scenarioCount, siteDataProfileId } = parsed.data;
@@ -149,25 +142,31 @@ app.post("/api/climate-sweep", async (req, reply) => {
   return result;
 });
 
-const OptimizeBody = z.object({ runId: z.string() });
+const OptimizeBody = OptimizationRequest;
 
-app.post("/api/optimize", async (req, reply) => {
+app.post("/api/optimize", { config: { rateLimit: { max: 2, timeWindow: "1 minute" } } }, async (req, reply) => {
   const parsed = OptimizeBody.safeParse(req.body);
   if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
   const before = runs.get(parsed.data.runId) ?? world.getRun(parsed.data.runId);
   if (!before) return reply.code(404).send({ error: "unknown runId \u2014 run /api/simulate first" });
+  if (before.manifest?.modelVersion !== MODEL_VERSION) return reply.code(409).send({ error: "This run belongs to an earlier engine. Its evidence is retained; rerun the current model before optimizing." });
+  if (before.intervention.reservePct !== 0 || before.intervention.evDelayMin !== 0 || before.intervention.precoolHour !== null) return reply.code(409).send({ error: "Run a no-intervention baseline before strategy search." });
 
   const calibration = before.calibration ?? await loadClimateCalibration(before.location);
   const location = locationFromCalibration(locationWithSiteData(LOCATIONS[before.location], before.siteData), calibration);
   // Search on an independent seeded cohort, then validate the winner on the
   // original baseline population. This prevents training-set performance from
   // masquerading as evidence that the intervention generalizes.
-  const analysis = analyzeInterventions(location, before.preset, before.config, 300, before.n, PRESET_ORDER);
+  const riskTargetPct = parsed.data.riskTargetPct;
+  const baselineSeedOffset = before.manifest?.seedOffset ?? 0;
+  const discoverySeedOffset = baselineSeedOffset + before.n;
+  const analysis = analyzeInterventions(location, before.preset, before.config, 300, discoverySeedOffset, PRESET_ORDER, riskTargetPct);
   const intervention = analysis.best.intervention;
-  const validation = validateIntervention(location, before.config, intervention, before.n + 10_000, 200, PRESET_ORDER, analysis.frontier.map((candidate) => candidate.intervention));
-  const mc = runMonteCarlo(before.n, location, before.preset, before.config, intervention);
-  const after = toRunSummary(randomUUID(), mc, calibration, undefined, 0, before.siteData);
+  const validation = validateIntervention(location, before.config, intervention, discoverySeedOffset + 10_000, validationCohortSize(riskTargetPct, PRESET_ORDER.length), PRESET_ORDER, analysis.frontier.map((candidate) => candidate.intervention), riskTargetPct);
+  const mc = runMonteCarlo(before.n, location, before.preset, before.config, intervention, baselineSeedOffset);
+  const after = toRunSummary(randomUUID(), mc, calibration, undefined, baselineSeedOffset, before.siteData);
   runs.set(after.runId, after);
+  world.saveRun(after);
 
   let historicalBeforeCritical = 0;
   let historicalAfterCritical = 0;
@@ -195,12 +194,49 @@ app.post("/api/optimize", async (req, reply) => {
       : "12 representative monthly climate profiles; all operational conditions are simulated",
   };
 
-  const growthEvents = world.recordOptimization(before.runId, before, after);
+  const retainedProof = { intervention, result: after, analysis, validation, historicalBacktest, growthEvents: [] };
+  world.saveOptimization(before.runId, retainedProof); // Immutable proof precedes an earned choice.
+  const growthEvents = world.recordOptimization(before.runId, before, after, retainedProof, riskTargetPct);
   broadcast({ type: "optimize.completed", runId: before.runId, intervention, result: after });
   for (const event of growthEvents) broadcast({ type: "growth", event });
   broadcast({ type: "world", world: world.getState() });
 
-  return { intervention, result: after, growthEvents, analysis, validation, historicalBacktest };
+  const verdict = assessOptimizationGrowth(before, after, { intervention, result: after, analysis, validation }, riskTargetPct);
+  const growthAssessment = { eligible: verdict.eligible, reasons: verdict.reasons, targetPct: verdict.targetPct, pairedSupport: verdict.pairedSupport };
+  const evidence = { intervention, result: after, growthEvents, analysis, validation, historicalBacktest, growthAssessment, world: world.getState() };
+  world.saveOptimization(before.runId, evidence);
+  return evidence;
+});
+
+app.get("/api/evidence/:runId", async (req, reply) => {
+  const runId = (req.params as { runId?: string }).runId;
+  if (!runId) return reply.code(400).send({ error: "runId required" });
+  const baseline = world.getRun(runId);
+  if (!baseline) return reply.code(404).send({ error: "unknown or incompatible run evidence" });
+  return { baseline, optimization: world.getOptimization(runId) ?? null };
+});
+
+app.get("/api/evidence/result/:runId", async (req, reply) => {
+  const runId = (req.params as { runId?: string }).runId;
+  const retained = runId && world.getOptimizationByResult(runId);
+  const baseline = retained && world.getRun(retained.baselineRunId);
+  if (!retained || !baseline) return reply.code(404).send({ error: "Exact immutable proof unavailable" });
+  return { baseline, optimization: retained.optimization };
+});
+
+app.post("/api/world/place", { config: { rateLimit: { max: 12, timeWindow: "1 minute" } } }, async (req, reply) => {
+  const parsed = PlacementRequest.safeParse(req.body);
+  if (!parsed.success) return reply.code(400).send({ error: parsed.error.flatten() });
+  try {
+    // Client evidence and unlock flags are ignored. SQLite supplies the exact
+    // retained model proof. The local anonymous server is not tenant auth.
+    const result = world.placeMilestone(parsed.data);
+    for (const event of result.growthEvents) broadcast({ type: "growth", event });
+    broadcast({ type: "world", world: result.world });
+    return result;
+  } catch (error) {
+    return reply.code(422).send({ error: error instanceof Error ? error.message : "Placement needs review" });
+  }
 });
 
 app.register(async (instance) => {

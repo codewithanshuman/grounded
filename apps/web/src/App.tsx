@@ -17,6 +17,14 @@ import "./proof-path.css";
 import "./identity.css";
 import "./dashboard-shell.css";
 import type { ForestActivity, ForestInspection } from "./game/GameCanvas";
+import type { EvidenceBuildPlan } from "./game/evidenceCity/placementModel";
+import { CITY_VARIANTS, type EvidenceMilestone, type PlacementRequest } from "@verdant/protocol/city";
+import type { StoredEvidence } from "@verdant/protocol/evidence";
+import { eligibleCityPlots } from "@verdant/sim/evidenceCity";
+import { EvidenceCityPanel } from "./hud/EvidenceCityPanel";
+import { EvidenceCertificate } from "./hud/EvidenceCertificate";
+import { EvidenceReplayPanel } from "./hud/EvidenceReplayPanel";
+import { worldStorageKey } from "./auth/localIdentity";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
 
@@ -49,7 +57,7 @@ const NAV_LABELS: Record<ViewId, string> = {
 
 export default function App() {
   const { identity, ready: identityReady, error: identityError, cloudConfigured, signIn, signOut } = useIdentitySession();
-  const { connected, engineError, engineNotice, world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite } = useVerdant(identity);
+  const { connected, engineError, engineNotice, restoredEvidence, persistEvidence, getMilestoneEvidence, placeMilestone, openEvidence, world, growthLog, simulate, optimize, runClimateSweep, getCalibration, getSiteDataProfiles, commissionSite, executionMode } = useVerdant(identity);
   const [identityOpen, setIdentityOpen] = useState(false);
   const [publicLabOpen, setPublicLabOpen] = useState(() => window.location.pathname === "/lab");
   const [isFoundingWorld, setIsFoundingWorld] = useState(false);
@@ -73,10 +81,18 @@ export default function App() {
   const [calibration, setCalibration] = useState<ClimateCalibration | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [forestInspection, setForestInspection] = useState<ForestInspection | null>(null);
+  const [buildPlan, setBuildPlan] = useState<EvidenceBuildPlan | null>(null);
+  const [cityError, setCityError] = useState<string | null>(null);
+  const [cityBusy, setCityBusy] = useState(false);
+  const [proofBusy, setProofBusy] = useState(false);
+  const [certificate, setCertificate] = useState<{ milestone: EvidenceMilestone; title: string } | null>(null);
+  const ownerRef = useRef(identity?.id);
+  ownerRef.current = identity?.id;
+  const cityOperationRef = useRef(false);
 
   const [activeView, setActiveView] = useState<ViewId>("overview");
   const [runElapsed, setRunElapsed] = useState(0);
-  const [riskTargetPct, setRiskTargetPct] = useState(1);
+  const [riskTargetPct, setRiskTargetPct] = useState(5);
   const [matrixInputKey, setMatrixInputKey] = useState<string | null>(null);
   const gateRef = useRef(new AnalysisGate());
   const inputs = { locationId, preset, config, scenarioCount, siteDataProfileId };
@@ -84,7 +100,7 @@ export default function App() {
   const selectedProfile = siteDataProfiles.find((profile) => profile.id === siteDataProfileId);
   const sweepKey = analysisInputKey({ ...inputs, preset: "normal", scenarioCount: 500 }) + (selectedProfile?.fingerprint ?? "");
   const requestContextRef = useRef("");
-  requestContextRef.current = `${identity?.id ?? "guest"}:${inputsKey}:${selectedProfile?.fingerprint ?? ""}`;
+  requestContextRef.current = `${identity?.id ?? "guest"}:${inputsKey}:${selectedProfile?.fingerprint ?? ""}:${riskTargetPct}`;
   const configIssues = inputIssues(inputs);
   const inputChanges = baseline ? changedRunInputs(baseline, inputs) : [];
   if (baseline?.siteData?.id === selectedProfile?.id && baseline?.siteData?.fingerprint !== selectedProfile?.fingerprint) inputChanges.push("data revision");
@@ -102,7 +118,8 @@ export default function App() {
     if (window.location.pathname !== "/lab") window.history.pushState({}, "", "/lab");
     setPublicLabOpen(true);
   }, []);
-  const isRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
+  const isAnalysisRunning = isFoundingWorld || isSimulating || isRevealingEvidence || isOptimizing || isSweeping;
+  const isRunning = isAnalysisRunning || cityBusy || proofBusy;
   const forestActivity: ForestActivity = isFoundingWorld ? "founding" : isOptimizing ? "optimization" : isSweeping ? "climate" : isSimulating ? "simulation" : null;
 
   useEffect(() => {
@@ -144,6 +161,8 @@ export default function App() {
       if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setBaseline(summary);
       setOptimized(null);
+      await persistEvidence(summary, null, riskTargetPct);
+      if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setSelectedFailureSeed(summary.failures[0]?.seed ?? null);
       setIsSimulating(false);
       setIsRevealingEvidence(true);
@@ -156,7 +175,7 @@ export default function App() {
     } finally {
       if (gateRef.current.finish(ticket)) { setIsSimulating(false); setIsRevealingEvidence(false); }
     }
-  }, [simulate, locationId, preset, config, scenarioCount, siteDataProfileId, connected, isRunning, configIssues.length, dataReady]);
+  }, [simulate, persistEvidence, riskTargetPct, locationId, preset, config, scenarioCount, siteDataProfileId, connected, isRunning, configIssues.length, dataReady]);
 
   const runOptimizer = useCallback(async () => {
     if (!baseline || !baselineIsCurrent || isRunning || !connected) return;
@@ -165,16 +184,18 @@ export default function App() {
     setIsOptimizing(true);
     setOperationError(null);
     try {
-      const result = await optimize(baseline.runId);
+      const result = await optimize(baseline.runId, riskTargetPct);
       if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setOptimized(result);
-      setActiveView("compare");
+      await persistEvidence(baseline, result, riskTargetPct);
+      if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
+      setActiveView(result.world?.pendingMilestones?.some((item) => item.proof.resultRunId === result.result.runId) ? "overview" : "compare");
     } catch (error) {
       if (gateRef.current.accepts(ticket, requestContextRef.current)) setOperationError(error instanceof Error ? error.message : "Optimization could not be completed.");
     } finally {
       if (gateRef.current.finish(ticket)) setIsOptimizing(false);
     }
-  }, [optimize, baseline, baselineIsCurrent, isRunning, connected]);
+  }, [optimize, persistEvidence, riskTargetPct, baseline, baselineIsCurrent, isRunning, connected]);
 
   const runAllHazards = useCallback(async () => {
     if (!connected || isRunning || configIssues.length || !dataReady) return;
@@ -231,9 +252,88 @@ export default function App() {
     setIsOptimizing(false);
     setIsSweeping(false);
     setIsRevealingEvidence(false);
+    setBuildPlan(null);
+    setCityError(null);
+    setCityBusy(false);
+    setProofBusy(false);
+    setCertificate(null);
+    setForestInspection(null);
+    cityOperationRef.current = false;
     setActiveView("overview");
     return () => gateRef.current.invalidate();
   }, [identity?.id]);
+
+  useEffect(() => {
+    if (!restoredEvidence) return;
+    const recorded = inputsForRun(restoredEvidence.baseline);
+    setBaseline(restoredEvidence.baseline);
+    setOptimized(restoredEvidence.optimization as unknown as OptimizeResponse | null);
+    setLocationId(recorded.locationId);
+    setPreset(recorded.preset);
+    setConfig(recorded.config);
+    setScenarioCount(recorded.scenarioCount);
+    setSiteDataProfileId(recorded.siteDataProfileId);
+    setRiskTargetPct(restoredEvidence.riskTargetPct);
+    setSelectedFailureSeed(restoredEvidence.baseline.failures[0]?.seed ?? null);
+  }, [restoredEvidence]);
+
+  const chooseArchitecture = useCallback(async (milestone: EvidenceMilestone, variantId: string) => {
+    if (isRunning || cityOperationRef.current) return;
+    const owner = ownerRef.current;
+    cityOperationRef.current = true;
+    setCityBusy(true); setCityError(null);
+    try {
+      await getMilestoneEvidence(milestone);
+      if (ownerRef.current !== owner) return;
+      setBuildPlan({ milestoneId: milestone.id, variantId, rotation: 0 });
+      setForestInspection(null);
+    } catch (error) {
+      if (ownerRef.current === owner) setCityError(error instanceof Error ? error.message : "The milestone proof could not be verified.");
+    } finally {
+      if (ownerRef.current === owner) { cityOperationRef.current = false; setCityBusy(false); }
+    }
+  }, [getMilestoneEvidence, isRunning]);
+
+  const constructMilestone = useCallback(async (request: PlacementRequest) => {
+    if (isRunning || cityOperationRef.current) return;
+    const owner = ownerRef.current;
+    cityOperationRef.current = true;
+    setCityBusy(true); setCityError(null);
+    try {
+      await placeMilestone(request);
+      if (ownerRef.current === owner) setBuildPlan(null);
+    } catch (error) {
+      if (ownerRef.current === owner) setCityError(error instanceof Error ? error.message : "Construction could not be saved.");
+    } finally {
+      if (ownerRef.current === owner) { cityOperationRef.current = false; setCityBusy(false); }
+    }
+  }, [placeMilestone, isRunning]);
+
+  const inspectMilestone = useCallback((milestoneId: string) => {
+    const pending = world?.pendingMilestones?.find((item) => item.id === milestoneId);
+    const building = world?.buildings.find((item) => item.milestoneId === milestoneId);
+    const milestone = pending ?? (building?.proof && building.family ? {
+      id: milestoneId, family: building.family, level: building.level ?? 1,
+      earnedAt: building.grownAt, proof: building.proof,
+    } : null);
+    if (!milestone) { setCityError("No evidence certificate is attached to this structure."); return; }
+    setCertificate({ milestone, title: CITY_VARIANTS.find((variant) => variant.id === building?.variantId)?.label ?? `${milestone.family} milestone` });
+    setBuildPlan(null); setForestInspection(null);
+  }, [world]);
+  const inspectForest = useCallback((inspection: ForestInspection) => {
+    if (inspection.milestoneId) inspectMilestone(inspection.milestoneId);
+    else setForestInspection(inspection);
+  }, [inspectMilestone]);
+  const closeCertificate = useCallback(() => setCertificate(null), []);
+  const compareCertificate = useCallback(async (evidence: StoredEvidence) => {
+    await openEvidence(evidence);
+    setActiveView("compare");
+  }, [openEvidence]);
+  const rotateConstruction = useCallback(() => {
+    if (!cityOperationRef.current) setBuildPlan((plan) => plan ? { ...plan, rotation: ((plan.rotation + 90) % 360) as EvidenceBuildPlan["rotation"] } : null);
+  }, []);
+  const cancelConstruction = useCallback(() => { if (!cityOperationRef.current) setBuildPlan(null); }, []);
+  const availablePlotIds = world && buildPlan ? eligibleCityPlots(world, buildPlan.milestoneId).map((plot) => plot.id) : [];
 
   const restoreRunInputs = () => {
     if (!baseline || isRunning) return;
@@ -360,13 +460,13 @@ export default function App() {
             <button onClick={() => setActiveView("compare")} disabled={!optimized} className={optimized ? "done" : ""}><b>4</b><span>Prove</span></button>
             <button onClick={() => setActiveView("method")} className={activeSiteData?.validation?.status === "PASS" ? "done" : activeView === "method" ? "active" : ""}><b>5</b><span>Audit</span></button>
           </nav>
-          {engineError && <div className="studio-snapshot-notice" role="alert"><div><strong>Simulation engine needs attention</strong><p>{engineError}</p><p>Reloading clears the open report; export any completed evidence first.</p></div><button onClick={() => window.location.reload()}>Reload workspace</button></div>}
+          {engineError && <div className="studio-snapshot-notice" role="alert"><div><strong>Simulation engine needs attention</strong><p>{engineError}</p><p>Saved evidence will be checked on reload. Export any report that could not be saved before closing this tab.</p></div><button onClick={() => window.location.reload()}>Reload workspace</button></div>}
           {engineNotice && <div className="studio-snapshot-notice" role="status"><div><strong>Saved world notice</strong><p>{engineNotice}</p></div></div>}
           {configIssues.length > 0 && <div className="studio-input-errors" role="alert"><strong>Check these inputs before running</strong><ul>{configIssues.map((issue) => <li key={issue}>{issue}</li>)}</ul></div>}
           {baseline && !baselineIsCurrent && <div className="studio-snapshot-notice" role="status"><div><strong>Your inputs have changed.</strong><p>The report below is preserved from the earlier run. Changed: {inputChanges.join(", ")}. Run again before evaluating a strategy for these inputs.</p></div><button disabled={isRunning} onClick={restoreRunInputs}>Restore run inputs</button></div>}
           {activeView === "matrix" && climateSweep && !matrixIsCurrent && <div className="studio-snapshot-notice" role="status"><div><strong>This matrix belongs to earlier inputs.</strong><p>Rebuild it to compare the current system across all five hazards.</p></div><button disabled={cannotRun} onClick={runAllHazards}>Rebuild matrix</button></div>}
           {operationError && <div className="operation-error" role="alert"><span>!</span><div><strong>Analysis interrupted</strong><p>{operationError} Your last completed report has been preserved. Check the inputs and retry; if the engine stopped, reload the workspace.</p></div><button onClick={() => setOperationError(null)} aria-label="Dismiss error">×</button></div>}
-          {isRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span><em>{runElapsed.toFixed(1)}s</em></div>}
+          {isAnalysisRunning && <div className="analysis-progress" role="status"><i /><span><strong>{isFoundingWorld ? `Founding ${identity?.worldName ?? "your resilience world"}` : isRevealingEvidence ? "Committing verified growth" : isOptimizing ? "Validating strategy" : isSweeping ? "Stress-testing every hazard" : "Exploring calibrated futures"}</strong><small>{isFoundingWorld ? "Surveying plots · raising the operations lab · opening the evidence ledger" : isRevealingEvidence ? "The completed run is becoming an inspectable tree" : isOptimizing ? "245 strategies · 3 holdouts · 4 assumption shocks" : "Deterministic 72-hour dispatch is running"}</small></span><em>{runElapsed.toFixed(1)}s</em></div>}
 
           {activeView === "overview" && (
             <>
@@ -375,7 +475,7 @@ export default function App() {
               <section className="world-card">
                 <div className="card-heading"><div><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div></div>
                 <div className="light-world">
-                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={setForestInspection} onReady={() => setWorldSceneReady(true)} /></Suspense>
+                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={inspectForest} onReady={() => setWorldSceneReady(true)} buildPlan={cityBusy ? null : buildPlan} onPlace={constructMilestone} onRotate={rotateConstruction} onCancel={cancelConstruction} /></Suspense>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
                     <small>{forestInspection.status}</small>
@@ -391,6 +491,7 @@ export default function App() {
                 <section className="canopy-card" style={{ backgroundImage: `url(${canopyUrl})` }}><div><p>Completed simulations grow inspectable evidence trees. The surrounding landscape is illustrative.</p></div></section>
               </aside>
             </div>
+            <EvidenceCityPanel world={world} busy={isRunning} buildPlan={buildPlan} error={cityError} availablePlotIds={availablePlotIds} onChoose={chooseArchitecture} onPlanChange={setBuildPlan} onPlace={constructMilestone} onInspect={inspectMilestone} />
             <section className="world-provenance-strip" aria-label="Current model provenance">
               <div><i /> <span><small>ACTIVE HAZARD</small><strong>{PRESETS[preset].label}</strong></span></div>
               <div><span><small>MODEL HORIZON</small><strong>72 hours · Δ15m</strong></span></div>
@@ -402,17 +503,19 @@ export default function App() {
 
           <Suspense fallback={<WorkspaceFallback />}>
             {activeView === "matrix" && climateSweep && <section className="analysis-card"><div className="analysis-heading"><div><small>MULTI-HAZARD VALIDATION</small><h3>Climate resilience matrix</h3></div><p>Five climate regimes. Identical seeds. One honest worst-case score.</p></div><div className="panel-surface analysis-body"><ClimateMatrixPanel sweep={climateSweep} /></div></section>}
-            {activeView === "risk" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>CAUSAL FORENSICS</small><h3>Where the system breaks</h3></div><button className="next-step" onClick={() => setActiveView("optimizer")}>Find a resilient strategy →</button></div><div className="panel-surface analysis-body"><RiskPanel baseline={baseline} selectedFailureSeed={selectedFailureSeed} setSelectedFailureSeed={setSelectedFailureSeed} /></div></section>}
+            {activeView === "risk" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>FAILURE FORENSICS</small><h3>Where the system breaks</h3></div><button className="next-step" onClick={() => setActiveView("optimizer")}>Find a resilient strategy →</button></div><div className="panel-surface analysis-body"><RiskPanel baseline={baseline} selectedFailureSeed={selectedFailureSeed} setSelectedFailureSeed={setSelectedFailureSeed} /></div></section>}
             {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>245 strategies searched across five hazards, then validated on three disjoint holdouts and four assumption shocks.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} disabled={isRunning || !baselineIsCurrent || !connected} runOptimizer={runOptimizer} /></div></section>}
             {activeView === "compare" && baseline && optimized && <section className="analysis-card"><div className="analysis-heading"><div><small>COUNTERFACTUAL PROOF</small><h3>Same future. Two strategies.</h3></div><p>Only the intervention changes between these two calibrated worlds.</p></div><div className="panel-surface analysis-body"><ComparePanel baseline={baseline} optimized={optimized} /></div></section>}
-            {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={baseline ? baseline.calibration ?? null : calibration} siteData={baseline ? baseline.siteData ?? null : activeSiteData} locationLabel={LOCATIONS[baseline?.location ?? locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} /></div></section>}
+            {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={baseline ? baseline.calibration ?? null : calibration} siteData={baseline ? baseline.siteData ?? null : activeSiteData} locationLabel={LOCATIONS[baseline?.location ?? locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} commissioningAvailable={executionMode === "Server engine"} /></div></section>}
           </Suspense>
+          {(activeView === "compare" || activeView === "method") && baseline && <EvidenceReplayPanel key={`${identity?.id ?? "guest"}:${optimized?.result.runId ?? baseline.runId}`} ownerScope={worldStorageKey(identity?.id)} baseline={baseline} optimization={optimized} targetPct={optimized?.analysis?.riskTargetPct ?? riskTargetPct} busy={isAnalysisRunning || cityBusy} onBusyChange={setProofBusy} />}
         </section>
       </main>
 
       <footer className="evidence-bar"><span className="evidence-label"><i /> EVIDENCE LEDGER</span>{world ? <div className="evidence-values"><span><b>{world.totalFuturesSimulated.toLocaleString()}</b> futures simulated</span><span><b>{world.trees.length}</b> trees earned</span><span><b>{world.buildings.length}</b> buildings grown</span></div> : <span>Connecting to the persistent forest…</span>}</footer>
       {toast && <div className="light-toast"><span>✓</span><div><small>VERIFIED GROWTH</small>{toast}</div></div>}
       <IdentityDialog open={identityOpen} profile={identity} cloudConfigured={cloudConfigured} authReady={identityReady} authError={identityError} onGitHubSignIn={signIn} onSignOut={signOut} onClose={() => setIdentityOpen(false)} />
+      {certificate && <EvidenceCertificate key={`${identity?.id ?? "guest"}:${certificate.milestone.id}`} milestone={certificate.milestone} title={certificate.title} loadProof={getMilestoneEvidence} onClose={closeCertificate} onCompare={compareCertificate} onBusyChange={setProofBusy} />}
     </div>
   );
 }

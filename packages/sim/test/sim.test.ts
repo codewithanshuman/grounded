@@ -9,7 +9,8 @@ import type { SiteDataProfile } from "@verdant/protocol";
 
 const jaipur = LOCATIONS.jaipur;
 const measuredProfile: SiteDataProfile = {
-  id: "test-meter", label: "Test meter", scope: "COMMISSIONED_SITE", status: "VERIFIED_SITE",
+  id: "test-meter", label: "Test meter", scope: "COMMISSIONED_SITE", status: "PARTIALLY_VERIFIED",
+  evidence: { demand: "VERIFIED", pv: "VERIFIED", reliability: "INSUFFICIENT_HISTORY", overall: "PARTIALLY_VERIFIED", limitations: ["Fixture has no independently verified outage exposure"] },
   demand: { station: "test", firstDate: "2025-01-01", lastDate: "2025-12-31", readings: 35040, completeSlots: 96, meanMW: 1, peakMW: 2, multiplier15m: Array(96).fill(1) },
   pv: { firstDate: "2025-01-01", lastDate: "2025-12-31", readings: 35040, customers: 1, nativeResolutionMinutes: 15, normalizedResolutionMinutes: 15, capacityFactor15m: Array.from({ length: 96 }, (_, slot) => slot >= 24 && slot <= 72 ? 0.5 : 0) },
   reliability: { period: "2025", saidiMinutesPerCustomerYear: 120, saifiInterruptionsPerCustomerYear: 1, meanRestorationHours: 2, sourceResolution: "event log" },
@@ -53,6 +54,24 @@ describe("simulateScenario", () => {
     const representative = simulateScenario(seedFor(4), jaipur, "normal", DEFAULT_CONFIG, DEFAULT_INTERVENTION, true);
     expect(evidenceFingerprint(a)).toEqual(evidenceFingerprint(b));
     expect(a.steps.map((step) => step.solarKW)).not.toEqual(representative.steps.map((step) => step.solarKW));
+  });
+
+  it("keeps commissioned energy shapes but never calibrates outages from unresolved sparse history", () => {
+    const sparse = { ...measuredProfile, reliability: { ...measuredProfile.reliability,
+      eventCount: 0, saifiInterruptionsPerCustomerYear: 0, meanRestorationHours: 0, durationQuantilesHours: [0, 0] } };
+    const arbitrary = { ...measuredProfile, reliability: { ...measuredProfile.reliability,
+      eventCount: 1, saifiInterruptionsPerCustomerYear: 1000, meanRestorationHours: 100, durationQuantilesHours: [50, 100] } };
+    for (let index = 0; index < 10; index++) {
+      const a = simulateScenario(seedFor(index), locationWithSiteData(jaipur, sparse), "extreme", DEFAULT_CONFIG, DEFAULT_INTERVENTION, true);
+      const b = simulateScenario(seedFor(index), locationWithSiteData(jaipur, arbitrary), "extreme", DEFAULT_CONFIG, DEFAULT_INTERVENTION, true);
+      expect(a.steps).toEqual(b.steps);
+      expect(a.outageDurationHours).toEqual(b.outageDurationHours);
+    }
+    const summary = toRunSummary("sparse-site", runMonteCarlo(100, locationWithSiteData(jaipur, sparse), "normal", DEFAULT_CONFIG, DEFAULT_INTERVENTION), undefined, undefined, 0, sparse);
+    const check = summary.audit?.checks.find((item) => item.id === "site_data");
+    expect(check?.passed).toBe(true); // metered energy integrity, not reliability verification
+    expect(check?.value).toContain("reliability unresolved");
+    expect(summary.siteData?.evidence?.reliability).toBe("INSUFFICIENT_HISTORY");
   });
 
   it("produces non-negative engineering, cost, and carbon accounting", () => {
@@ -255,7 +274,7 @@ describe("optimizeIntervention", () => {
     expect(validation.cohorts.every((cohort) => cohort.preventedFailures >= 0 && cohort.introducedFailures >= 0)).toBe(true);
     expect(validation.cohorts.every((cohort) => cohort.afterWilsonHighPct >= cohort.afterCriticalPct)).toBe(true);
     expect(validation.cohorts.every((cohort) => cohort.pairedPValue >= 0 && cohort.pairedPValue <= 1)).toBe(true);
-    expect(validation.statisticallyResolvedCohorts).toBe(validation.cohorts.filter((cohort) => cohort.pairedPValue < 0.05).length);
+    expect(validation.statisticallyResolvedCohorts).toBe(validation.cohorts.filter((cohort) => cohort.pairedClusterPValue < 0.05).length);
     expect(validation.jointStressEnvelope.evaluatedCells).toBe(81);
     expect(validation.jointStressEnvelope.dimensions).toHaveLength(4);
     expect(validation.jointStressEnvelope.sampleSizePerCell).toBe(20);

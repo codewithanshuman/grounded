@@ -4,6 +4,7 @@ import { DEFAULT_CONFIG, simulateScenario } from "@verdant/sim";
 import type { OptimizeResponse } from "../src/ws/client";
 import { replayLocation } from "../src/lib/runReplay";
 import { assessDecisionReadiness } from "../src/lib/decisionReadiness";
+import { assessOptimizationGrowth } from "@verdant/sim/growth";
 
 /** Real dispatch boundary and real simulation/search engines; only worker transport is in-process. */
 describe("Static worker complete analysis workflow", () => {
@@ -18,6 +19,13 @@ describe("Static worker complete analysis workflow", () => {
     expect(response.id).toBe(id);
     expect(response.ok, `${op} failed: ${response.error ?? "unknown error"}`).toBe(true);
     return response.result;
+  }
+  function rejected(op: string, args: Record<string, unknown>, message: string): void {
+    worker.postMessage.mockClear();
+    worker.onmessage!({ data: { id: `reject-${++requestId}`, op, args } });
+    const response = worker.postMessage.mock.lastCall![0] as { ok: boolean; error?: string };
+    expect(response.ok).toBe(false);
+    expect(response.error).toContain(message);
   }
 
   beforeAll(async () => {
@@ -71,19 +79,23 @@ describe("Static worker complete analysis workflow", () => {
     expect(first.analysis.hazardCount).toBe(5);
     expect(first.analysis.frontier.length).toBeGreaterThan(0);
     expect(first.validation.cohorts).toHaveLength(3);
-    expect(first.validation.cohorts.every((cohort) => cohort.sampleSize === 200 && cohort.seedOffset >= 10_500)).toBe(true);
+    expect(first.validation.cohorts.every((cohort) => cohort.sampleSize === 300 && cohort.seedOffset >= 10_500)).toBe(true);
+    expect(first.analysis.riskTargetPct).toBe(5);
+    expect(first.validation.riskTargetPct).toBe(5);
+    expect(first.validation.cohorts.every((cohort) => cohort.clusterUncertainty.clusterCount === 60)).toBe(true);
     expect(first.validation.jointStressEnvelope.evaluatedCells).toBe(81);
     expect(first.validation.decisionStability.cohorts).toHaveLength(3);
-    const planning=assessDecisionReadiness(baseline,first,1);
+    const planning=assessDecisionReadiness(baseline,first,5);
     expect(planning.evidenceValid).toBe(true);
-    expect(planning.withinTarget).toBe(false); // Independent 200-future holdouts cannot resolve a 1% bound.
+    expect(assessDecisionReadiness(baseline, first, 1).withinTarget).toBe(false); // Changing the target requires rerunning the search.
     expect(planning.holdouts).toHaveLength(3);
     expect(first.historicalBacktest.periods).toBeGreaterThan(0);
     expect(first.historicalBacktest.futures).toBe(first.historicalBacktest.periods * 24);
     expect(first.world.totalRuns).toBe(1);
     expect(first.world.totalFuturesSimulated).toBe(500);
-    const qualifying = (baseline.counts.critical - first.result.counts.critical) / baseline.counts.critical >= 0.9;
-    expect(first.world.buildings).toHaveLength(qualifying ? 1 : 0);
+    const qualifying = assessOptimizationGrowth(baseline, first.result, first, 5).eligible;
+    expect(first.world.buildings).toHaveLength(0); // Successful evidence earns a choice, not an automatic building.
+    expect((first.world.pendingMilestones?.length ?? 0) > 0).toBe(qualifying);
 
     const repeated = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId });
     expect(repeated.result.runId).not.toBe(first.result.runId);
@@ -94,12 +106,33 @@ describe("Static worker complete analysis workflow", () => {
     expect(repeated.world.buildings).toEqual(first.world.buildings);
     expect(repeated.world.trees).toEqual(simulated.world.trees);
 
+    // Full evidence reload supplies the original baseline to the new worker;
+    // restoring a rendered world alone cannot invent those source inputs.
+    const restored = dispatch<{ world: WorldState }>("init", { world: repeated.world, runs: [baseline, first.result, repeated.result] });
+    expect(restored.world).toEqual(repeated.world);
+    expect(dispatch("restoreEvidence", { runs: [baseline, first.result] })).toEqual({ restored: true });
+    expect(dispatch<{ world: WorldState }>("init").world).toEqual(repeated.world);
+    rejected("restoreEvidence", { runs: [baseline, baseline] }, "duplicate run identifiers");
+    const afterReload = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId, riskTargetPct: 5 });
+    expect(afterReload.result.counts).toEqual(first.result.counts);
+    expect(afterReload.result.manifest?.runFingerprint).toBe(first.result.manifest?.runFingerprint);
+    expect(afterReload.world).toEqual(repeated.world);
+    expect(afterReload.growthEvents).toEqual([]);
+    rejected("optimize", { runId: afterReload.result.runId, riskTargetPct: 5 }, "no-intervention baseline");
+    rejected("init", { world: afterReload.world, runs: [{ ...baseline, manifest: { ...baseline.manifest!, modelVersion: "legacy" } }] }, "another model");
+    rejected("init", { world: afterReload.world, runs: [{ ...baseline, manifest: { ...baseline.manifest!, calibrationFingerprint: "tampered" } }] }, "inconsistent source");
+    expect(dispatch<{ world: WorldState }>("init").world).toEqual(repeated.world);
+    const reviewRun = { ...baseline, runId: "review-only", audit: { ...baseline.audit!, status: "REVIEW" } };
+    expect(dispatch<{ world: WorldState }>("init", { world: afterReload.world, runs: [reviewRun] }).world).toEqual(repeated.world);
+
     const sweep = ClimateSweepResult.parse(dispatch("sweep", { ...request, scenarioCount: 100 }));
     expect(sweep.scenarios).toHaveLength(5);
     expect(sweep.scenarios.every((scenario) => Object.values(scenario.counts).reduce((total, value) => total + value, 0) === 100)).toBe(true);
     expect(sweep.robustScore).toBe(Math.min(...sweep.scenarios.map((scenario) => scenario.resilienceScore)));
     const finalWorld = dispatch<{ world: WorldState }>("init").world;
     expect(finalWorld).toEqual(repeated.world);
+    dispatch("init", { world: finalWorld });
+    rejected("optimize", { runId: baseline.runId, riskTargetPct: 5 }, "Run a simulation before optimizing");
     console.info("Static workflow evidence", JSON.stringify({ baselineCritical: baseline.counts.critical, optimizedCritical: first.result.counts.critical, holdoutsPassed: first.validation.passedCohorts, holdouts: first.validation.cohortCount, trees: finalWorld.trees.length, buildings: finalWorld.buildings.length, sweepHazards: sweep.scenarios.length }));
   }, 300_000);
 });

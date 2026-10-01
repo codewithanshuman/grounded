@@ -10,7 +10,7 @@ import {
 import { StatBlock, RiskSegmentBar, TimelineList } from "./Widgets";
 import type { OptimizeResponse } from "../ws/client";
 import { replayLocation } from "../lib/runReplay";
-import { assessRun } from "../lib/analysisContext";
+import { assessOptimizationGrowth } from "@verdant/sim/growth";
 
 /* ----------------------------- Climate Matrix ------------------------------ */
 export function ClimateMatrixPanel({ sweep }: { sweep: ClimateSweepResult }) {
@@ -101,8 +101,10 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
 
       <div className="advanced-evidence-row">
         <section className="sensitivity-panel">
-          <div className="mini-heading"><div><small>STRESS SENSITIVITY</small><strong>What controls system risk?</strong></div><span>{baseline.sensitivity?.sampleSize ?? 0} paired futures</span></div>
-          {baseline.sensitivity?.factors.map((factor) => <div className="sensitivity-row" key={factor.id}><span>{factor.label}</span><div><i style={{ width: `${Math.max(2, factor.contributionPct)}%` }} /></div><b>{factor.contributionPct.toFixed(1)}%</b><small>+{factor.deltaCriticalPct.toFixed(1)} pts</small></div>)}
+          <div className="mini-heading"><div><small>COUNTERFACTUAL SENSITIVITY</small><strong>Which assumptions change modeled risk?</strong></div><span>{baseline.sensitivity?.sampleSize ?? 0} paired futures</span></div>
+          {baseline.sensitivity?.factors.every((factor) => factor.deltaCriticalPct === 0) && <p>No dominant risk driver detected under the tested perturbations.</p>}
+          {baseline.sensitivity?.factors.map((factor) => <div className="sensitivity-row" key={factor.id}><span>{factor.label}</span><div><i style={{ width: `${Math.max(0, factor.contributionPct)}%` }} /></div><b>{factor.contributionPct.toFixed(1)}%</b><small>+{factor.deltaCriticalPct.toFixed(1)} pts</small></div>)}
+          {baseline.sensitivity && <p>Same simulated seeds, one changed assumption at a time. Shares normalize tested risk increments; they are not real-world causal attribution.</p>}
           {baseline.sensitivity?.interaction && <div className="interaction-proof"><small>SECOND-ORDER INTERACTION</small><strong>{baseline.sensitivity.interaction.factorALabel} × {baseline.sensitivity.interaction.factorBLabel}</strong><p>Combined risk {baseline.sensitivity.interaction.combinedCriticalPct.toFixed(1)}% · interaction {baseline.sensitivity.interaction.interactionDeltaPct >= 0 ? "+" : ""}{baseline.sensitivity.interaction.interactionDeltaPct.toFixed(1)} points beyond additive expectation.</p></div>}
           {!baseline.sensitivity && <p className="text-[10px] text-slate-500">Sensitivity analysis unavailable for this run.</p>}
         </section>
@@ -114,11 +116,11 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
 
       <div className="reliability-environment-row">
         <section className="depth-card reliability-card">
-          <div className="mini-heading"><div><small>RELIABILITY STANDARD</small><strong>Failure probability is not enough</strong></div><span>72-hour horizon</span></div>
+          <div className="mini-heading"><div><small>72-HOUR MODEL RELIABILITY</small><strong>Failure probability is not enough</strong></div><span>Not annual utility indices</span></div>
           <div className="depth-metric-grid">
-            <span><small>LOLP</small><b>{criticalPct.toFixed(1)}%</b><em>futures with critical loss</em></span>
-            <span><small>LOLE</small><b>{baseline.metrics?.meanCriticalLossHours?.toFixed(1) ?? "—"} h</b><em>mean critical-loss duration</em></span>
-            <span><small>EENS</small><b>{baseline.metrics?.meanTotalUnservedKWh?.toFixed(0) ?? "—"} kWh</b><em>mean unserved energy</em></span>
+            <span><small>CRITICAL LOSS RISK</small><b>{criticalPct.toFixed(1)}%</b><em>futures with critical loss</em></span>
+            <span><small>LOSS DURATION</small><b>{baseline.metrics?.meanCriticalLossHours?.toFixed(1) ?? "—"} h</b><em>mean per 72-hour future</em></span>
+            <span><small>UNSERVED ENERGY</small><b>{baseline.metrics?.meanTotalUnservedKWh?.toFixed(0) ?? "—"} kWh</b><em>mean per 72-hour future</em></span>
             <span><small>CVaR95</small><b>{baseline.metrics?.cvar95TotalUnservedKWh?.toFixed(0) ?? "—"} kWh</b><em>mean of worst 5% futures</em></span>
           </div>
           <p>Tail severity stays visible even when average risk looks acceptable. P95 critical-loss duration: <strong>{baseline.metrics?.p95CriticalLossHours?.toFixed(1) ?? "—"} hours</strong>.</p>
@@ -237,7 +239,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
 
   return (
     <div className="w-[560px]">
-      <p className="text-[11px] text-slate-500 mb-2">Searches battery reserve, EV-charging delay, and pre-cooling start on an independent 300-future cohort, then validates the winner against the original {baseline.n.toLocaleString()} unseen baseline futures.</p>
+      <p className="text-[11px] text-slate-500 mb-2">Tests all 245 policies in an independent 300-evaluation discovery cohort. Among candidates whose conservative seed-cluster bound meets your planning target, select minimal disruption, then cost/carbon. If none qualifies, return an unresolved risk-first fallback. The chosen policy is then challenged on unseen evidence, including the original {baseline.n.toLocaleString()} baseline futures.</p>
       <button
         onClick={runOptimizer}
         disabled={disabled || isOptimizing}
@@ -250,10 +252,12 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
         <>
           <div className="grid grid-cols-4 gap-2 mb-3">
             <StatBlock label="Strategies" value={optimized.analysis.evaluatedStrategies.toLocaleString()} sub="exhaustively tested" color="#a78bfa" />
-            <StatBlock label="Search cohort" value={optimized.analysis.sampleSize.toLocaleString()} sub="non-overlapping futures" color="#367367" />
+            <StatBlock label="Search cohort" value={optimized.analysis.sampleSize.toLocaleString()} sub={`${optimized.analysis.best.clusterUncertainty.clusterCount} independent seed clusters`} color="#367367" />
             <StatBlock label="Hazard regimes" value={optimized.analysis.hazardCount.toLocaleString()} sub="robust objective" color="#8b6948" />
             <StatBlock label="Pareto frontier" value={optimized.analysis.frontier.length.toLocaleString()} sub="non-dominated plans" color="#fbbf24" />
           </div>
+          <p>{optimized.analysis.selectionReason}</p>
+          {optimized.growthAssessment && <details className="decision-evidence"><summary>{optimized.growthAssessment.eligible ? "Evidence milestone earned" : "Why no new evidence building?"}</summary><p>Buildings require the complete independent target, audit, no-regression, stress/stability and statistically resolved paired-improvement gate. A completed simulation still records a tree when audited.</p>{optimized.growthAssessment.reasons.map((reason, index) => <p key={index}>{reason}</p>)}</details>}
           <div className="grid grid-cols-3 gap-2 mb-3">
             <StatBlock label="Reserve" value={`${optimized.intervention.reservePct}%`} color="#34d399" />
             <StatBlock label="EV delay" value={`${optimized.intervention.evDelayMin}m`} color="#38bdf8" />
@@ -278,8 +282,8 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             <div><span><small>BEFORE</small><b>{optimized.historicalBacktest.beforeCritical}</b></span><i>→</i><span><small>AFTER</small><b>{optimized.historicalBacktest.afterCritical}</b></span></div>
           </div>
           <section className={`optimizer-validation ${optimized.validation.recommendationStable ? "passed" : "review"}`}>
-            <div className="validation-lead"><span>{optimized.validation.recommendationStable ? "✓" : "!"}</span><div><small>PAIRED GENERALIZATION AUDIT</small><strong>{optimized.validation.passedCohorts}/{optimized.validation.cohortCount} disjoint holdouts passed · {optimized.validation.statisticallyResolvedCohorts} statistically resolved</strong><p>Identical hazard seeds isolate policy effect. Exact paired inference, Wilson uncertainty, four one-at-a-time shocks and a compound stress envelope are disclosed.</p></div></div>
-            <div className="cohort-grid">{optimized.validation.cohorts.map((cohort) => <div key={cohort.label}><small>{cohort.label} · SEEDS {cohort.seedOffset}+</small><span><b>{cohort.beforeCriticalPct.toFixed(1)}%</b><i>→</i><strong>{cohort.afterCriticalPct.toFixed(1)}%</strong></span><p>{cohort.preventedFailures} prevented · {cohort.introducedFailures} introduced · exact paired p {cohort.pairedPValue < 0.001 ? "<0.001" : cohort.pairedPValue.toFixed(3)} · upper 95% {cohort.afterWilsonHighPct.toFixed(1)}%</p></div>)}</div>
+            <div className="validation-lead"><span>{optimized.validation.recommendationStable ? "✓" : "!"}</span><div><small>PAIRED GENERALIZATION AUDIT</small><strong>{optimized.validation.passedCohorts}/{optimized.validation.cohortCount} disjoint holdouts passed · {optimized.validation.statisticallyResolvedCohorts} statistically resolved</strong><p>Identical hazard seeds isolate modeled policy effect. Exact seed-cluster paired inference, conservative cluster bounds, four one-at-a-time shocks and a compound stress envelope are disclosed. Passing non-regression is separate from satisfying the planning target.</p></div></div>
+            <div className="cohort-grid">{optimized.validation.cohorts.map((cohort) => <div key={cohort.label}><small>{cohort.label} · SEEDS {cohort.seedOffset}+</small><span><b>{cohort.beforeCriticalPct.toFixed(1)}%</b><i>→</i><strong>{cohort.afterCriticalPct.toFixed(1)}%</strong></span><p>{cohort.preventedFailures} prevented · {cohort.introducedFailures} introduced (hazard evaluations) · {cohort.clusterUncertainty.clusterCount} seed clusters · cluster paired p {cohort.pairedClusterPValue < 0.001 ? "<0.001" : cohort.pairedClusterPValue.toFixed(3)} · conservative upper 95% {cohort.clusterUncertainty.upperCriticalRiskPct.toFixed(2)}% · {cohort.targetMet ? "target supported" : "target unresolved"}</p><p>Nominal per-evaluation Wilson upper {cohort.afterWilsonHighPct.toFixed(2)}%; diagnostic only.</p></div>)}</div>
             <div className="shock-grid">{optimized.validation.shockResults.map((shock) => <div className={shock.passed ? "passed" : "review"} key={shock.label}><span>{shock.passed ? "✓" : "!"}</span><div><small>{shock.label}</small><strong>{shock.beforeCritical} → {shock.afterCritical} failures</strong><p>{shock.preventedFailures} prevented · {shock.introducedFailures} introduced</p></div></div>)}</div>
             <section className={`joint-stress-envelope ${optimized.validation.jointStressEnvelope.passingCells === optimized.validation.jointStressEnvelope.evaluatedCells ? "passed" : "review"}`}>
               <div className="joint-stress-heading"><div><small>81-CELL COMPOUND STRESS ENVELOPE</small><strong>Four uncertainties tested together—not one at a time</strong></div><span>{optimized.validation.jointStressEnvelope.passingCells}/{optimized.validation.jointStressEnvelope.evaluatedCells} cells passed</span></div>
@@ -289,9 +293,9 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             </section>
             <section className={`decision-stability ${optimized.validation.decisionStability.stable ? "passed" : "review"}`}>
               <div className="decision-stability-heading"><div><small>PARETO DECISION STABILITY</small><strong>Did the selected policy keep its rank on unseen futures?</strong></div><span>{optimized.validation.decisionStability.stable ? "STABLE SHORTLIST" : "DECISION REVIEW"}</span></div>
-              <div className="decision-stability-summary"><span><small>FINALISTS</small><b>{optimized.validation.decisionStability.candidateCount}</b></span><span><small>FIRST PLACE</small><b>{optimized.validation.decisionStability.firstPlaceCohorts}/{optimized.validation.decisionStability.cohortCount}</b></span><span><small>TOP THREE</small><b>{optimized.validation.decisionStability.topThreeCohorts}/{optimized.validation.decisionStability.cohortCount}</b></span><span><small>MAX REGRET</small><b>{optimized.validation.decisionStability.maxRiskRegretPct.toFixed(1)} pts</b></span></div>
-              <div className="decision-cohort-grid">{optimized.validation.decisionStability.cohorts.map((cohort) => <div key={cohort.label}><small>{cohort.label} · SAME SEEDS</small><strong>Rank {cohort.recommendedRank}/{cohort.candidateCount}</strong><p>Selected {cohort.recommendedRiskPct.toFixed(1)}% · best {cohort.bestRiskPct.toFixed(1)}% · regret {cohort.riskRegretPct.toFixed(1)} pts</p><code>Winner {cohort.winnerLabel}</code></div>)}</div>
-              <p className="decision-boundary">Shortlist stability is evaluated only among the non-dominated finalists discovered by the search—not claimed across every possible real-world control policy.</p>
+              <div className="decision-stability-summary"><span><small>FINALISTS</small><b>{optimized.validation.decisionStability.candidateCount}</b></span><span><small>FIRST PLACE</small><b>{optimized.validation.decisionStability.firstPlaceCohorts}/{optimized.validation.decisionStability.cohortCount}</b></span><span><small>TOP THREE</small><b>{optimized.validation.decisionStability.topThreeCohorts}/{optimized.validation.decisionStability.cohortCount}</b></span><span><small>MAX BURDEN GAP</small><b>{optimized.validation.decisionStability.maxRiskRegretPct.toFixed(1)} pts</b></span></div>
+              <div className="decision-cohort-grid">{optimized.validation.decisionStability.cohorts.map((cohort) => <div key={cohort.label}><small>{cohort.label} · SAME SEEDS</small><strong>Rank {cohort.recommendedRank}/{cohort.candidateCount}</strong><p>Weighted burden: selected {cohort.recommendedRiskPct.toFixed(1)} · target-aware winner {cohort.bestRiskPct.toFixed(1)} · gap {cohort.riskRegretPct.toFixed(1)} pts</p><code>Winner {cohort.winnerLabel}</code></div>)}</div>
+              <p className="decision-boundary">Weighted burden = 100 × (critical + 0.45 × high-risk outcomes) / evaluations; it is not a failure probability. Shortlist stability is evaluated only among the non-dominated finalists discovered by the search—not claimed across every possible real-world control policy.</p>
             </section>
           </section>
           <section className="benchmark-table">
@@ -303,7 +307,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
           <div className="mt-3">
             <h4 className="text-[9px] tracking-wider text-slate-500 uppercase mb-1.5">Explainable Pareto frontier</h4>
             <div className="frontier-grid frontier-head">
-              <span>Plan</span><span>Risk</span><span>Unserved</span><span>Cost</span><span>Carbon</span><span>Score</span>
+              <span>Plan</span><span>Critical</span><span>Unserved</span><span>Cost</span><span>Carbon</span><span>Score</span>
             </div>
             {optimized.analysis.frontier.map((candidate) => {
               const recommended = candidate.intervention.reservePct === optimized.intervention.reservePct &&
@@ -312,7 +316,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
               return (
                 <div key={`${candidate.intervention.reservePct}-${candidate.intervention.evDelayMin}-${candidate.intervention.precoolHour}`} className={`frontier-grid frontier-row ${recommended ? "recommended" : ""}`}>
                   <span className={recommended ? "text-emerald-300 font-medium" : "text-slate-400"}>{recommended ? "★ " : ""}R{candidate.intervention.reservePct} · D{candidate.intervention.evDelayMin} · {candidate.intervention.precoolHour == null ? "no pre" : fmtHour(candidate.intervention.precoolHour)}</span>
-                  <span>{candidate.riskPct.toFixed(1)}%</span>
+                  <span>{(candidate.criticalCount / optimized.analysis.sampleSize * 100).toFixed(1)}%</span>
                   <span>{candidate.meanUnservedKWh.toFixed(0)}</span>
                   <span>${candidate.meanOperationalCost.toFixed(0)}</span>
                   <span>{candidate.meanCarbonKg.toFixed(0)} kg</span>
@@ -320,6 +324,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
                 </div>
               );
             })}
+            <p className="decision-boundary">Critical is the observed discovery failure fraction. Score is 100 minus weighted burden, not a confidence bound or a reliability guarantee.</p>
           </div>
         </>
       )}
@@ -357,7 +362,8 @@ export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; op
   const carbonDelta = (optimized.result.metrics?.meanCarbonKg ?? 0) - (baseline.metrics?.meanCarbonKg ?? 0);
   const pairedPrevented = optimized.validation.cohorts.reduce((sum, cohort) => sum + cohort.preventedFailures, 0);
   const pairedIntroduced = optimized.validation.cohorts.reduce((sum, cohort) => sum + cohort.introducedFailures, 0);
-  const checksPassed = optimized.validation.recommendationStable && assessRun(baseline, 100).audited && assessRun(optimized.result, 100).audited;
+  const proofAssessment = assessOptimizationGrowth(baseline, optimized.result, optimized, optimized.validation.riskTargetPct);
+  const checksPassed = proofAssessment.eligible;
   const comparisonTitle = avoidedCritical > 0 ? `${reductionPct}% fewer observed critical failures`
     : avoidedCritical < 0 ? `${Math.abs(avoidedCritical).toLocaleString()} additional critical failures — review required`
     : baseline.counts.critical === 0 ? "No critical failures observed in either sample" : "No change in observed critical failures";
@@ -368,8 +374,9 @@ export function ComparePanel({ baseline, optimized }: { baseline: RunSummary; op
       <div className="impact-brief">
         <div className="impact-brief-copy"><small>90-SECOND DECISION PROOF</small><strong>{comparisonTitle}</strong><p>Observed hospital power-loss risk: {beforeRiskPct.toFixed(1)}% before and {afterRiskPct.toFixed(1)}% after on {baseline.n.toLocaleString()} paired futures never used for optimizer search. Zero observed failures is not a field reliability guarantee.</p></div>
         <div className="impact-metrics proof-three"><span><small>{avoidedCritical < 0 ? "NET ADDITIONAL FAILURES" : "NET FAILURES AVOIDED"}</small><b>{Math.abs(avoidedCritical).toLocaleString()}</b></span><span><small>95% RESIDUAL RISK</small><b>{afterConfidence.lowPct}–{afterConfidence.highPct}%</b></span><span><small>CLIMATE REPLAY PERIODS PASSED</small><b>{optimized.historicalBacktest.passedPeriods}/{optimized.historicalBacktest.periods}</b></span></div>
-        <div className="validation-stamp"><span>{checksPassed ? "✓" : "!"}</span><div><b>OUT-OF-SAMPLE</b><small>{checksPassed ? "CHECKS PASSED" : "REVIEW REQUIRED"}</small></div></div>
+        <div className="validation-stamp"><span>{checksPassed ? "✓" : "!"}</span><div><b>MODEL VALIDATION</b><small>{checksPassed ? "CHECKS PASSED" : "REVIEW REQUIRED"}</small></div></div>
       </div>
+      {!checksPassed && <p className="decision-boundary">{proofAssessment.readiness?.summary ?? "Complete independent validation is required."} {!proofAssessment.pairedSupport && "Paired improvement remains statistically unresolved in at least one seed-cluster holdout."}</p>}
       <div className="proof-audit-strip"><span><small>COST / FUTURE</small><b>{costDelta >= 0 ? "+" : "−"}${Math.abs(costDelta).toFixed(0)}</b></span><span><small>CARBON / FUTURE</small><b>{carbonDelta >= 0 ? "+" : "−"}{Math.abs(carbonDelta).toFixed(0)} kg</b></span><span><small>PAIRED HOLDOUTS</small><b>{pairedPrevented} saved · {pairedIntroduced} introduced</b></span><span><small>RUN ID</small><code>{optimized.result.manifest?.runFingerprint ?? optimized.result.runId.slice(0, 12)}</code></span><span><small>INTEGRITY</small><b>{optimized.result.audit?.status ?? "NOT AVAILABLE"}</b></span></div>
       {worldA && worldB ? <>
       <div className="grid grid-cols-2 gap-3 mb-3">

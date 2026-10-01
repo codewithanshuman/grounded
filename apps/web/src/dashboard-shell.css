@@ -1168,3 +1168,7 @@
   .lab-shell .model-rail,
   .lab-shell .lab-content { animation: none; }
 }
+.workspace-recovery { padding: 24px; }
+.workspace-recovery h3 { margin: 0 0 12px; }
+.workspace-recovery p { max-width: 68ch; line-height: 1.6; }
+.workspace-recovery button { margin-top: 12px; }

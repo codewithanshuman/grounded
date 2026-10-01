@@ -112,6 +112,8 @@ export class GroundedCityScene extends WorldScene {
   private constructionStatusHandler?: (status: EvidenceConstructionStatus[]) => void;
   private evidenceFrontages = new Map<string, Phaser.GameObjects.Graphics>();
   private inspectionPress?: { x: number; y: number; pointerId: number; dragged: boolean };
+  private rendererReady = false;
+  private deferredWorld?: { world: WorldState; growthEvents: GrowthEvent[] };
 
   constructor() {
     super();
@@ -137,7 +139,15 @@ export class GroundedCityScene extends WorldScene {
     this.input.on("pointermove", this.noteInspectionTravel);
     this.input.on("pointerup", this.clearInspectionPress);
     this.input.on("pointerupoutside", this.clearInspectionPress);
+    this.rendererReady = true;
+    this.events.once(Phaser.Scenes.Events.CREATE, () => {
+      const pending = this.deferredWorld;
+      this.deferredWorld = undefined;
+      if (pending) this.setGroundedWorld(pending.world, pending.growthEvents);
+    });
     this.events.once("shutdown", () => {
+      this.rendererReady = false;
+      this.deferredWorld = undefined;
       this.input.off("pointerdown", this.noteInspectionPress);
       this.input.off("pointermove", this.noteInspectionTravel);
       this.input.off("pointerup", this.clearInspectionPress);
@@ -211,6 +221,13 @@ export class GroundedCityScene extends WorldScene {
   setRailSpeed(speed: number): void { this.railway?.setSpeed(speed); }
 
   setGroundedWorld(world: WorldState, growthEvents: GrowthEvent[] = []): void {
+    if (!this.rendererReady || !this.scene?.isActive()) {
+      // Deferring only super.setWorld is insufficient: the reserve, railway
+      // and signature facilities also need textures created by this scene.
+      this.deferredWorld = { world, growthEvents };
+      return;
+    }
+    this.deferredWorld = undefined;
     this.latestWorld = world;
     const snapshot = snapshotFor(world);
     super.setWorld(snapshot, "main", "grounded-jaipur");

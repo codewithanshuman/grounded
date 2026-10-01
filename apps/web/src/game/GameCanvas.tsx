@@ -76,12 +76,22 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
       render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: false, powerPreference: "low-power" },
     });
     gameRef.current = game;
-    game.events.once(Phaser.Core.Events.READY, () => {
+    let disposed = false;
+    const initializeScene = () => {
+      if (disposed || sceneRef.current !== scene) return;
       if (worldRef.current) scene.setGroundedWorld(worldRef.current);
       scene.setActivity(activityRef.current);
       scene.setBuildPlan(planRef.current);
       readyRef.current?.();
-    });
+    };
+    const onGameReady = () => {
+      if (disposed) return;
+      // Game READY precedes image preloading. Hydrate only after scene create()
+      // has baked the terrain atlas and the extra Grounded architecture.
+      if (scene.scene.isActive()) initializeScene();
+      else scene.events.once(Phaser.Scenes.Events.CREATE, initializeScene);
+    };
+    game.events.once(Phaser.Core.Events.READY, onGameReady);
 
     const observer = new ResizeObserver(([entry]) => {
       if (!entry || entry.contentRect.width <= 0 || entry.contentRect.height <= 0) return;
@@ -91,6 +101,9 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
     observer.observe(containerRef.current);
 
     return () => {
+      disposed = true;
+      game.events.off(Phaser.Core.Events.READY, onGameReady);
+      scene.events?.off(Phaser.Scenes.Events.CREATE, initializeScene);
       observer.disconnect();
       scene.setPlacementHandlers({}); scene.setConstructionStatusHandler(undefined);
       game.destroy(true);

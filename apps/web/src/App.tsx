@@ -24,6 +24,7 @@ import { eligibleCityPlots } from "@verdant/sim/evidenceCity";
 import { EvidenceCityPanel } from "./hud/EvidenceCityPanel";
 import { EvidenceCertificate } from "./hud/EvidenceCertificate";
 import { EvidenceReplayPanel } from "./hud/EvidenceReplayPanel";
+import { WorkspaceBoundary } from "./hud/WorkspaceBoundary";
 import { worldStorageKey } from "./auth/localIdentity";
 
 type ViewId = "overview" | "matrix" | "risk" | "optimizer" | "compare" | "method";
@@ -475,7 +476,7 @@ export default function App() {
               <section className="world-card">
                 <div className="card-heading"><div><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div></div>
                 <div className="light-world">
-                  <Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={inspectForest} onReady={() => setWorldSceneReady(true)} buildPlan={cityBusy ? null : buildPlan} onPlace={constructMilestone} onRotate={rotateConstruction} onCancel={cancelConstruction} /></Suspense>
+                  <WorkspaceBoundary><Suspense fallback={<WorkspaceFallback />}><GameCanvas world={world} pendingGrowth={growthLog} activity={forestActivity} onInspect={inspectForest} onReady={() => setWorldSceneReady(true)} buildPlan={cityBusy ? null : buildPlan} onPlace={constructMilestone} onRotate={rotateConstruction} onCancel={cancelConstruction} /></Suspense></WorkspaceBoundary>
                   {forestInspection && <aside className="world-inspector" aria-live="polite">
                     <button onClick={() => setForestInspection(null)} aria-label="Close evidence inspector">×</button>
                     <small>{forestInspection.status}</small>
@@ -501,13 +502,13 @@ export default function App() {
             </>
           )}
 
-          <Suspense fallback={<WorkspaceFallback />}>
+          <WorkspaceBoundary key={activeView}><Suspense fallback={<WorkspaceFallback />}>
             {activeView === "matrix" && climateSweep && <section className="analysis-card"><div className="analysis-heading"><div><small>MULTI-HAZARD VALIDATION</small><h3>Climate resilience matrix</h3></div><p>Five climate regimes. Identical seeds. One honest worst-case score.</p></div><div className="panel-surface analysis-body"><ClimateMatrixPanel sweep={climateSweep} /></div></section>}
             {activeView === "risk" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>FAILURE FORENSICS</small><h3>Where the system breaks</h3></div><button className="next-step" onClick={() => setActiveView("optimizer")}>Find a resilient strategy →</button></div><div className="panel-surface analysis-body"><RiskPanel baseline={baseline} selectedFailureSeed={selectedFailureSeed} setSelectedFailureSeed={setSelectedFailureSeed} /></div></section>}
             {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>245 strategies searched across five hazards, then validated on three disjoint holdouts and four assumption shocks.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} disabled={isRunning || !baselineIsCurrent || !connected} runOptimizer={runOptimizer} /></div></section>}
             {activeView === "compare" && baseline && optimized && <section className="analysis-card"><div className="analysis-heading"><div><small>COUNTERFACTUAL PROOF</small><h3>Same future. Two strategies.</h3></div><p>Only the intervention changes between these two calibrated worlds.</p></div><div className="panel-surface analysis-body"><ComparePanel baseline={baseline} optimized={optimized} /></div></section>}
             {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={baseline ? baseline.calibration ?? null : calibration} siteData={baseline ? baseline.siteData ?? null : activeSiteData} locationLabel={LOCATIONS[baseline?.location ?? locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} commissioningAvailable={executionMode === "Server engine"} /></div></section>}
-          </Suspense>
+          </Suspense></WorkspaceBoundary>
           {(activeView === "compare" || activeView === "method") && baseline && <EvidenceReplayPanel key={`${identity?.id ?? "guest"}:${optimized?.result.runId ?? baseline.runId}`} ownerScope={worldStorageKey(identity?.id)} baseline={baseline} optimization={optimized} targetPct={optimized?.analysis?.riskTargetPct ?? riskTargetPct} busy={isAnalysisRunning || cityBusy} onBusyChange={setProofBusy} />}
         </section>
       </main>

@@ -167,3 +167,29 @@ Also exercise a real browser run → reload → optimize → reload sequence and
 verify no duplicate growth. Run browser E2E and deployment checks separately;
 do not infer they passed from a unit suite or a successful build. Test counts
 and a smooth demonstration do not prove field reliability or scientific validity.
+
+### Reproducible manual QA cases for engine 2.8.0
+
+The following cases exercise the actual browser worker, not injected certificates:
+
+- Default configuration, Jaipur, Extreme Combined Event, 500 futures, bundled
+  Ausgrid reference, 5% target: the selected sample improved from 15 to 3
+  critical futures, but unresolved independent evidence withheld construction.
+  Baseline restoration and complete analysis replay passed.
+- Representative engineering profiles, Jaipur, Extreme Combined Event, 500
+  futures, 5% target; default configuration except battery 36,000 kWh, 900 homes,
+  maximum grid import 600 kW and mean restoration 24 hours: the selected sample
+  improved from 257 to 0 critical futures. The selected reserve was 20%, with
+  no EV delay or precooling. All three independent seed-cluster upper bounds
+  were approximately 4.8703%; all 81 stress cells passed and the complete gate
+  earned storage and resilience milestones. This is a deliberately configured
+  modeled stress case, **not measured Jaipur facility validation**.
+- On the production site, the resilience milestone was used to place a
+  community resilience hall on resilience plot 2 at 90 degrees. The retained
+  certificate and complete replay passed. Reload preserved the report, consumed
+  entitlement and building without another tree or building reward.
+
+Optional workspaces now contain their render/load failures within a recovery
+panel rather than blanking the whole dashboard. Refresh is user-triggered;
+there is no silent reload that discards unsaved edits. A loading failure is not
+evidence that a simulation failed or that a retained report is invalid.

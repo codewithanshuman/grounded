@@ -204,8 +204,8 @@ describe("Evidence city placement renderer contract", () => {
 
   it("has nine archive-backed designs and four front orientations without tipping a bitmap", () => {
     for (const variant of CITY_VARIANTS) {
-      expect(evidenceVisualStyle(variant.id, 1)?.tier).toBe(0);
-      expect(evidenceVisualStyle(variant.id, 3)?.tier).toBe(2);
+      expect(evidenceVisualStyle(variant.id, 1)?.tier).toBe(1);
+      expect(evidenceVisualStyle(variant.id, 3)?.tier).toBe(3);
     }
     expect(evidenceVisualStyle("unregistered")).toBeUndefined();
     expect([0,90,180,270].map((rotation) => orientationFront(rotation as 0|90|180|270))).toHaveLength(4);

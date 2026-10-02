@@ -17,7 +17,10 @@ const STYLES: Record<string, { archetype: Archetype; language: string; accent: n
 export function evidenceVisualStyle(variantId: string, level = 1, rotation: EvidenceOrientation = 0) {
   const style = STYLES[variantId];
   if (!style) return undefined;
-  const tier = Math.min(3, Math.max(0, Math.floor(level) - 1));
+  // Evidence level remains the proof contract. Presentation starts at the
+  // authored mid-rise tier so a newly earned building reads as infrastructure,
+  // not as a tiny placeholder; stronger proof still earns two visible upgrades.
+  const tier = Math.min(3, Math.max(1, Math.floor(level)));
   return { ...style, tier, loc: [25, 100, 250, 600][tier]!,
     facing: rotation === 90 || rotation === 270 ? "u" as const : "v" as const,
     flipX: rotation === 180 || rotation === 270 };

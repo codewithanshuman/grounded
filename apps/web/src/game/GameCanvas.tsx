@@ -5,11 +5,23 @@ import type { GrowthEvent, WorldState } from "@verdant/protocol";
 import type { RailStatus } from "./rail/RailSystem";
 import { RAIL_STATIONS } from "./rail/railModel";
 import "./rail/rail-controls.css";
+import "./game-canvas.css";
 import type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placementModel";
 import type { EvidencePlacementStatus } from "./evidenceCity/EvidenceCityPlacement";
 import type { EvidenceConstructionStatus } from "./evidenceCity/EvidenceConstruction";
 import "./evidenceCity/evidence-city.css";
 export type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placementModel";
+
+const DISTRICTS: ReadonlyArray<{ id: CityView; label: string; detail: string }> = [
+  { id: "city", label: "Central city", detail: "Resilience district" },
+  { id: "north", label: "North city", detail: "Campus and housing" },
+  { id: "forest", label: "Forest reserve", detail: "Ecology island" },
+  { id: "bridge", label: "Water bridge", detail: "City–reserve link" },
+  { id: "landmarks", label: "Civic quarter", detail: "Public institutions" },
+  { id: "energy", label: "Energy corridor", detail: "Generation and grid" },
+  { id: "rail", label: "Northern metro", detail: "Animated transit" },
+  { id: "world", label: "Whole world", detail: "Optional overview" },
+];
 
 export type ForestActivity = "founding" | "simulation" | "optimization" | "climate" | null;
 
@@ -36,6 +48,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [district, setDistrict] = useState<CityView>("city");
+  const [districtMenuOpen, setDistrictMenuOpen] = useState(false);
   const [railStatus, setRailStatus] = useState<RailStatus | null>(null);
   const [placementStatus, setPlacementStatus] = useState<EvidencePlacementStatus | null>(null);
   const [constructionStatus, setConstructionStatus] = useState<EvidenceConstructionStatus[]>([]);
@@ -72,8 +85,8 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
       backgroundColor: "#2e9fe0",
       scene,
       scale: { mode: Phaser.Scale.RESIZE },
-      fps: { target: 30 },
-      render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: false, powerPreference: "low-power" },
+      fps: { target: 60 },
+      render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: true, powerPreference: "high-performance" },
     });
     gameRef.current = game;
     let disposed = false;
@@ -123,12 +136,31 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
   }, [activity]);
   useEffect(() => { sceneRef.current?.setBuildPlan(buildPlan); }, [buildPlan]);
 
-  return <div style={{ width: "100%", height: "100%", position: "relative" }}>
-    <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-    <nav aria-label="Explore city districts" style={{position:"absolute",left:16,top:16,zIndex:4,display:"flex",flexWrap:"wrap",gap:4,maxWidth:"calc(100% - 32px)",padding:5,borderRadius:14,background:"rgba(255,255,255,.94)",boxShadow:"0 4px 20px #14362720",border:"1px solid #ffffffaa"}}>
-      {([['city','City'],['north','North city'],['forest','Forest'],['bridge','Bridge'],['landmarks','Civic quarter'],['energy','Energy'],['rail','Railway'],['world','Whole world']] as const).map(([id,label])=>
-        <button key={id} type="button" aria-pressed={district===id} onClick={()=>{setDistrict(id);sceneRef.current?.showDistrict(id);}}
-          style={{font:"600 13px Manrope, sans-serif",padding:"9px 13px",border:0,borderRadius:9,cursor:"pointer",background:district===id?"#e0edce":"transparent",color:district===id?"#244633":"#50615c"}}>{label}</button>)}
+  const activeDistrict = DISTRICTS.find((item) => item.id === district) ?? DISTRICTS[0]!;
+  const chooseDistrict = (view: CityView) => {
+    setDistrict(view);
+    setDistrictMenuOpen(false);
+    sceneRef.current?.showDistrict(view);
+  };
+
+  return <div className="world-viewport">
+    <div ref={containerRef} className="world-renderer" />
+    <div className="world-atmosphere" aria-hidden="true" />
+    <nav className={`world-navigation${districtMenuOpen ? " is-open" : ""}`} aria-label="Explore city districts">
+      <button className="world-navigation-trigger" type="button" aria-expanded={districtMenuOpen} onClick={() => setDistrictMenuOpen((open) => !open)}>
+        <span><small>VIEWING</small><strong>{activeDistrict.label}</strong></span>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 8 4 4 4-4" /></svg>
+      </button>
+      {districtMenuOpen && <div className="world-navigation-menu">
+        {DISTRICTS.map((item, index) => <button key={item.id} type="button" aria-pressed={district === item.id}
+          onClick={() => chooseDistrict(item.id)}>
+          <b>{String(index + 1).padStart(2, "0")}</b><span><strong>{item.label}</strong><small>{item.detail}</small></span>
+        </button>)}
+      </div>}
+      {!districtMenuOpen && district !== "world" && <button className="world-overview-action" type="button" onClick={() => chooseDistrict("world")}>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3.5 4.5h5v5h-5zm8 0h5v5h-5zm-8 7h5v5h-5zm8 0h5v5h-5z" /></svg>
+        <span>Overview</span>
+      </button>}
     </nav>
     {district === "rail" && railStatus && <details className="rail-operations" aria-label="Railway operations">
       <summary className="rail-control-summary">Northern metro <span>{railStatus.paused ? "Paused" : "2 services"} · controls</span></summary>

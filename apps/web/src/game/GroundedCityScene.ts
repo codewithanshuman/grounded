@@ -3,7 +3,7 @@ import type { Building, GrowthEvent, Tree, WorldState } from "@verdant/protocol"
 import { CITY_PLOTS, LEGACY_EVIDENCE_PLOTS as SHARED_LEGACY_PLOTS } from "@verdant/protocol/city";
 import Phaser from "phaser";
 import { WorldScene } from "../reference-city/WorldScene";
-import { CLICK_SLOP, FOCUS_ZOOM, MIN_ZOOM, projection } from "../reference-city/world/core/worldConstants";
+import { CLICK_SLOP, FOCUS_ZOOM, GROUND_DEPTH, MIN_ZOOM, projection } from "../reference-city/world/core/worldConstants";
 import { TILE_ANCHOR_Y } from "../reference-city/textures/core";
 import { propTextureKey } from "../reference-city/textures/props";
 import { prefersReducedMotion } from "../reference-city/systems/ambient";
@@ -111,6 +111,9 @@ export class GroundedCityScene extends WorldScene {
   private evidenceConstruction?: EvidenceConstruction;
   private constructionStatusHandler?: (status: EvidenceConstructionStatus[]) => void;
   private evidenceFrontages = new Map<string, Phaser.GameObjects.Graphics>();
+  private evidencePlotScenery: Phaser.GameObjects.GameObject[] = [];
+  private urbanInfillObjects: Phaser.GameObjects.GameObject[] = [];
+  private urbanInfillSites: Array<readonly [number, number]> = [];
   private inspectionPress?: { x: number; y: number; pointerId: number; dragged: boolean };
   private rendererReady = false;
   private deferredWorld?: { world: WorldState; growthEvents: GrowthEvent[] };
@@ -156,6 +159,9 @@ export class GroundedCityScene extends WorldScene {
       this.placement?.destroy(); this.placement = undefined;
       this.evidenceConstruction?.destroy(); this.evidenceConstruction = undefined;
       this.evidenceFrontages.forEach((frontage) => frontage.destroy()); this.evidenceFrontages.clear();
+      this.evidencePlotScenery.forEach((object) => object.destroy()); this.evidencePlotScenery = [];
+      this.urbanInfillObjects.forEach((object) => object.destroy()); this.urbanInfillObjects = [];
+      this.urbanInfillSites = [];
       this.forestReserveObjects.forEach(object => this.tweens.killTweensOf(object));
       this.forestReserveObjects = [];
       this.reserveBuilt = false;
@@ -202,6 +208,10 @@ export class GroundedCityScene extends WorldScene {
     const newlySelected = !!plan && plan.milestoneId !== this.buildPlan?.milestoneId;
     this.buildPlan = plan;
     this.placement?.setPlan(plan);
+    if (this.latestWorld) {
+      this.refreshContextProps();
+      this.refreshEvidencePlotScenery(this.latestWorld);
+    }
     if (newlySelected && this.latestWorld && this.scene?.isActive()) {
       const variant = evidenceVariant(plan.variantId);
       const plots = CITY_PLOTS.filter((plot) => (plot.families as readonly string[]).includes(variant?.family ?? ""));
@@ -248,7 +258,9 @@ export class GroundedCityScene extends WorldScene {
     }
     this.drawSignatureFacilities();
     this.drawEvidenceVariants(world);
-    this.clearLandmarkProps();
+    this.drawUrbanInfill(world);
+    this.refreshContextProps();
+    this.refreshEvidencePlotScenery(world);
     this.expandCameraBounds();
     this.syncEvidenceTrees(world.trees, this.hasHydratedWorld);
     this.syncFacilityLabels();
@@ -279,17 +291,69 @@ export class GroundedCityScene extends WorldScene {
     this.forestReserveObjects.push(...addPylonLine(this,[{gx:45,gy:21},{gx:45,gy:27},{gx:45,gy:33},{gx:39,gy:33}]).objects);
   }
 
-  private clearLandmarkProps(): void {
+  private refreshContextProps(): void {
+    const occupiedPlots = new Set(this.latestWorld?.buildings
+      .map((building) => catalogPlotFor(building)?.id).filter((id) => id !== undefined));
     for (const prop of this.terrainManager.propSprites) {
       if (prop.texture.key.includes("capitol")) continue;
       const {x,y}=projection.unproject(prop.x,prop.y-TILE_ANCHOR_Y);
       const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
       const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
-      // Planned evidence seats remain legible before construction. This clears
-      // only decorative scatter, never the run-linked trees in the reserve.
-      const evidenceSeat=CITY_PLOTS.some(plot=>Math.abs(plot.gx-x)<.6&&Math.abs(plot.gy-y)<.6);
-      if (insideLandmark(x,y)||approach||energy||evidenceSeat||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5)) prop.setVisible(false);
+      const evidencePlot=CITY_PLOTS.find(plot=>Math.abs(plot.gx-x)<.6&&Math.abs(plot.gy-y)<.6);
+      const evidenceSeat=!!evidencePlot && (!!this.buildPlan || occupiedPlots.has(evidencePlot.id));
+      const infillSeat=this.urbanInfillSites.some(([gx,gy])=>Math.abs(gx-x)<.6&&Math.abs(gy-y)<.6);
+      const contextClear=insideLandmark(x,y)||approach||energy||infillSeat||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5);
+      // Empty evidence seats remain landscaped. Scatter is hidden only during
+      // placement or after a real evidence building occupies the seat.
+      if (contextClear || evidenceSeat) prop.setVisible(false);
+      else if (evidencePlot) prop.setVisible(true);
     }
+  }
+
+  private refreshEvidencePlotScenery(world: WorldState): void {
+    this.evidencePlotScenery.forEach((object) => object.destroy());
+    this.evidencePlotScenery = [];
+    if (this.buildPlan) return;
+    const occupied = new Set(world.buildings.map((building) => catalogPlotFor(building)?.id)
+      .filter((id) => id !== undefined));
+    for (const [index, plot] of CITY_PLOTS.entries()) {
+      if (occupied.has(plot.id)) continue;
+      const garden = this.add.graphics().setDepth(GROUND_DEPTH + 28);
+      const corners = [[-.46,-.46],[.46,-.46],[.46,.46],[-.46,.46]]
+        .map(([dx,dy]) => projection.project(plot.gx + dx!, plot.gy + dy!));
+      garden.fillStyle(index % 3 === 0 ? 0xbfd99b : 0xd8e7bd, .54)
+        .lineStyle(1, 0xf2f7dc, .72).fillPoints(corners, true).strokePoints(corners, true);
+      this.evidencePlotScenery.push(garden);
+      for (const [offsetIndex, [dx,dy]] of ([[.55,-.55],[-.55,.55]] as const).entries()) {
+        const point = projection.project(plot.gx + dx, plot.gy + dy);
+        const texture = offsetIndex === index % 2 ? propTextureKey("bush") : propTextureKey("lamp");
+        const prop = this.add.image(point.x, point.y + TILE_ANCHOR_Y, texture).setOrigin(.5,1)
+          .setDepth(projection.depth(plot.gx + dx, plot.gy + dy) + 1)
+          .setScale(texture.includes("lamp") ? .82 : .72).setAlpha(.92);
+        this.evidencePlotScenery.push(prop);
+      }
+    }
+  }
+
+  /** Dense contextual fabric, explicitly non-evidence and non-interactive. */
+  private drawUrbanInfill(world: WorldState): void {
+    this.urbanInfillObjects.forEach((object) => object.destroy());
+    this.urbanInfillObjects = [];
+    const occupied = world.buildings.map((building, index) => renderedBuildingPlot(building, index));
+    const isOccupied = (gx: number, gy: number) => occupied.some((plot) => Math.abs(plot.gx-gx)<.6 && Math.abs(plot.gy-gy)<.6);
+    const newEvidenceSeat = (gx: number, gy: number) => CITY_PLOTS.some((plot) => plot.gx===gx && plot.gy===gy);
+    this.urbanInfillSites = SHARED_LEGACY_PLOTS.filter(([gx,gy], index) => index % 2 === 0
+      && !newEvidenceSeat(gx,gy) && !isOccupied(gx,gy)).slice(0,22);
+    const archetypes = ["house", "townhouse", "office"] as const;
+    const languages = ["HTML", "CSS", "JavaScript", "TypeScript"] as const;
+    this.urbanInfillSites.forEach(([gx,gy], index) => {
+      const baked = bakeBuilding(this, archetypes[index % archetypes.length]!, index % 7 === 0 ? 1 : 0,
+        languages[index % languages.length]!, index % 2 ? "u" : "v");
+      const point = projection.project(gx,gy);
+      const sprite = this.add.image(point.x,point.y+TILE_ANCHOR_Y,baked.key).setOrigin(.5,1)
+        .setDepth(projection.depth(gx,gy)+1).setScale(index % 5 === 0 ? .88 : .78).setAlpha(.94);
+      this.urbanInfillObjects.push(sprite);
+    });
   }
 
   private expandCameraBounds(): void {
@@ -325,15 +389,25 @@ export class GroundedCityScene extends WorldScene {
     else if(view==="energy") corners=[[37,-1],[49,-1],[49,35],[37,35]];
     else if(view==="rail") corners=[[11,-94],[33,-94],[33,-27],[11,-27]];
     else if(view==="world") corners=[...northernShoreline().map(point=>[point.x,point.y] as const),[-45,-3],[74,43],[-15,49],[-45,27]];
-    else corners=[[-6,-4],[50,-4],[50,40],[-8,45]];
+    else corners=[[1,0],[41,0],[41,34],[1,34]];
     const points=corners.map(([x,y])=>projection.project(x,y));
-    const left=Math.min(...points.map(p=>p.x))-100, right=Math.max(...points.map(p=>p.x))+100;
-    const top=Math.min(...points.map(p=>p.y))-300, bottom=Math.max(...points.map(p=>p.y))+70;
-    // Fit below the actual navigation height, not behind it on narrow displays.
-    const topInset=camera.width<420?155:camera.width<760?112:72;
+    const overview=view==="world"||view==="north"||view==="rail";
+    const horizontalPad=overview?88:48, topPad=overview?230:165, bottomPad=overview?64:44;
+    const left=Math.min(...points.map(p=>p.x))-horizontalPad, right=Math.max(...points.map(p=>p.x))+horizontalPad;
+    const top=Math.min(...points.map(p=>p.y))-topPad, bottom=Math.max(...points.map(p=>p.y))+bottomPad;
+    // The collapsed navigator needs one row. The previous two-row selector and
+    // 300px sky allowance forced the authored city into a miniature overview.
+    const topInset=camera.width<420?76:68;
     const bottomInset=view==="rail"?78:20;
-    const zoom=Phaser.Math.Clamp(Math.min((camera.width-40)/(right-left),(camera.height-topInset-bottomInset)/(bottom-top)),MIN_ZOOM,1);
-    const centerY=(top+bottom)/2-(topInset-bottomInset)/(2*zoom);
+    const fittedZoom=Math.min((camera.width-32)/(right-left),(camera.height-topInset-bottomInset)/(bottom-top));
+    // District views are intentionally closer than the optional overview.
+    // The reserve gets its own focused composition; the bridge view is where
+    // the full water crossing and both shores are presented together.
+    const preferredZoom=view==="city"?(camera.width<760?.175:.22):view==="forest"?.28:view==="bridge"?.26
+      :view==="landmarks"||view==="energy"?.27:MIN_ZOOM;
+    const zoom=Phaser.Math.Clamp(Math.max(fittedZoom,preferredZoom),MIN_ZOOM,1);
+    const overviewLift=view==="world"?58/zoom:0;
+    const centerY=(top+bottom)/2-(topInset-bottomInset)/(2*zoom)-overviewLift;
     if(animate && !prefersReducedMotion()){
       this.cameraController.noteCameraInput();
       this.cameraController.moveCameraTo((left+right)/2,centerY,zoom);

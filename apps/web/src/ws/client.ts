@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClimateCalibration, SiteDataProfile, ServerMessage, WorldState as WorldStateSchema, GrowthEvent as GrowthEventSchema, type ClimateSweepResult, type GrowthEvent, type Intervention, type LocationId, type MicrogridConfig, type PresetId, type RunSummary, type WorldState } from "@verdant/protocol";
 import type { OptimizationSearch, OptimizerValidation } from "@verdant/sim";
+import type { InvestmentOptimization } from "@verdant/sim/investmentOptimizer";
 import { persistCloudWorld } from "../auth/cloudIdentity";
 import { worldStorageKey, type IdentityProfile } from "../auth/localIdentity";
 import { isAnalysisOperation } from "./engineRequest";
@@ -30,6 +31,7 @@ export interface OptimizeResponse {
   growthEvents: GrowthEvent[];
   analysis: OptimizationSearch;
   validation: OptimizerValidation;
+  investmentAnalysis?: InvestmentOptimization;
   historicalBacktest: {
     periods: number;
     futures: number;

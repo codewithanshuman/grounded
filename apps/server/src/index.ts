@@ -19,6 +19,7 @@ import { CommissionSiteBody, createCommissionedSiteProfile, loadCommissionedProf
 import { PlacementRequest } from "@verdant/protocol/city";
 import { SimulationRequest, SweepRequest, OptimizationRequest, validationCohortSize } from "@verdant/protocol/requests";
 import { assessOptimizationGrowth } from "@verdant/sim/growth";
+import { optimizeInfrastructure } from "@verdant/sim/investmentOptimizer";
 
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.VERDANT_DB_PATH ?? "./verdant-forest.db";
@@ -162,6 +163,12 @@ app.post("/api/optimize", { config: { rateLimit: { max: 2, timeWindow: "1 minute
   const discoverySeedOffset = baselineSeedOffset + before.n;
   const analysis = analyzeInterventions(location, before.preset, before.config, 300, discoverySeedOffset, PRESET_ORDER, riskTargetPct);
   const intervention = analysis.best.intervention;
+  const investmentAnalysis = optimizeInfrastructure(location, before.preset, before.config, {
+    sampleSizePerHazard: 20, seedOffset: discoverySeedOffset + 100_000, hazards: PRESET_ORDER,
+    targetCriticalRiskPct: riskTargetPct, intervention,
+    solarOptionsKW: [0, 1_200], batteryOptionsKWh: [0, 6_000],
+    generatorOptionsKW: [0, 800], demandControlOptionsPct: [0, 20],
+  });
   const validation = validateIntervention(location, before.config, intervention, discoverySeedOffset + 10_000, validationCohortSize(riskTargetPct, PRESET_ORDER.length), PRESET_ORDER, analysis.frontier.map((candidate) => candidate.intervention), riskTargetPct);
   const mc = runMonteCarlo(before.n, location, before.preset, before.config, intervention, baselineSeedOffset);
   const after = toRunSummary(randomUUID(), mc, calibration, undefined, baselineSeedOffset, before.siteData);
@@ -194,7 +201,7 @@ app.post("/api/optimize", { config: { rateLimit: { max: 2, timeWindow: "1 minute
       : "12 representative monthly climate profiles; all operational conditions are simulated",
   };
 
-  const retainedProof = { intervention, result: after, analysis, validation, historicalBacktest, growthEvents: [] };
+  const retainedProof = { intervention, result: after, analysis, validation, historicalBacktest, investmentAnalysis, growthEvents: [] };
   world.saveOptimization(before.runId, retainedProof); // Immutable proof precedes an earned choice.
   const growthEvents = world.recordOptimization(before.runId, before, after, retainedProof, riskTargetPct);
   broadcast({ type: "optimize.completed", runId: before.runId, intervention, result: after });
@@ -203,7 +210,7 @@ app.post("/api/optimize", { config: { rateLimit: { max: 2, timeWindow: "1 minute
 
   const verdict = assessOptimizationGrowth(before, after, { intervention, result: after, analysis, validation }, riskTargetPct);
   const growthAssessment = { eligible: verdict.eligible, reasons: verdict.reasons, targetPct: verdict.targetPct, pairedSupport: verdict.pairedSupport };
-  const evidence = { intervention, result: after, growthEvents, analysis, validation, historicalBacktest, growthAssessment, world: world.getState() };
+  const evidence = { intervention, result: after, growthEvents, analysis, validation, historicalBacktest, investmentAnalysis, growthAssessment, world: world.getState() };
   world.saveOptimization(before.runId, evidence);
   return evidence;
 });

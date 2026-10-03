@@ -12,6 +12,7 @@ export interface EvidencePlacement extends EvidenceBuildPlan { plotId: string }
 export type EvidencePlot = (typeof CITY_PLOTS)[number];
 export type EvidenceVariant = (typeof CITY_VARIANTS)[number];
 export interface PlacementVerdict { eligible: boolean; reason: string; plot: EvidencePlot; variant?: EvidenceVariant }
+export type EvidencePlotPresentation = "OCCUPIED" | "SELECTED" | "ELIGIBLE" | "UNRELATED";
 
 /** Isometric front orientation, not a rotated two-dimensional building bitmap. */
 export const nextEvidenceOrientation = (rotation: EvidenceOrientation): EvidenceOrientation =>
@@ -42,6 +43,16 @@ export function placementVerdict(world: WorldState, plan: EvidenceBuildPlan, plo
   return { eligible: status.valid, reason: status.valid
     ? sameFamily ? "Upgrade this building." : "Available evidence plot."
     : status.reason, plot, variant };
+}
+
+/** Keeps construction mode local to the plot under consideration. */
+export function evidencePlotPresentation(world: WorldState, plan: EvidenceBuildPlan | null,
+  plot: EvidencePlot, selectedPlotId?: string): EvidencePlotPresentation {
+  if (world.buildings.some((building) => catalogPlotFor(building)?.id === plot.id)) return "OCCUPIED";
+  if (!plan) return "UNRELATED";
+  const eligible = placementVerdict(world, plan, plot).eligible;
+  if (eligible && selectedPlotId === plot.id) return "SELECTED";
+  return eligible ? "ELIGIBLE" : "UNRELATED";
 }
 
 /** A world pointer must be inside the authored land tile, not its bounding box. */

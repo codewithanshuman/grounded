@@ -15,10 +15,14 @@ uncertainty and unresolved evidence are displayed alongside the results.
 
 ## What the model does
 
-- Engine **2.8.0** carries energy state through 72 hours at 15-minute resolution
+- Engine **3.0.0** carries energy state through 72 hours at 15-minute resolution
   (288 dispatch intervals). It includes PV temperature loss, battery charge and
   discharge limits, efficiency, minimum SOC, degradation cost, grid cost and
-  carbon, and critical/flexible unserved energy.
+  carbon, generator start/fuel/failure state, four clinical service tiers, and
+  critical/flexible unserved energy.
+- A transparent conditional dependency layer links the paired operational day,
+  heat/storm regime, demand/PV state, outage occurrence and restoration stress.
+  It is a modeled dependency structure, not a fitted multivariate site-outage model.
 - Every dispatch step is audited for source-to-sink energy balance. Run audits
   also check classification totals, battery bounds, finite outputs, deterministic
   replay, declared sampling precision and the operational-data quality gate.
@@ -66,6 +70,16 @@ and recommendation/shortlist stability. A forest building has a stricter gate:
 it also requires a positive reduction from a nonzero baseline and exact paired
 seed-cluster McNemar improvement with `p < 0.05` in **every** independent holdout.
 Neither readiness nor a building certifies a real facility.
+
+## Physical investment search
+
+The Site Resilience Engine compares explicit solar, battery, generator and
+demand-control portfolios on identical seeded futures across all five hazards.
+It exposes reference CAPEX, tail unserved energy, critical risk, operating cost
+and operational carbon, then returns only non-dominated portfolios. The
+recommendation is the lowest-reference-CAPEX frontier candidate that meets the
+planning target, or a clearly unresolved risk-first candidate when none does.
+Reference CAPEX is a transparent assumption set, not a supplier quotation.
 
 Only an audited completed run earns a persistent tree. A qualifying optimization
 earns a pending Evidence City milestone. The user chooses one of three designs

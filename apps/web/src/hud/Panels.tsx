@@ -263,6 +263,26 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             <StatBlock label="EV delay" value={`${optimized.intervention.evDelayMin}m`} color="#38bdf8" />
             <StatBlock label="Precool" value={optimized.intervention.precoolHour != null ? fmtHour(optimized.intervention.precoolHour) : "off"} color="#fbbf24" />
           </div>
+          {optimized.investmentAnalysis && (() => {
+            const investment = optimized.investmentAnalysis.recommendation;
+            return <section className="investment-decision">
+              <div className="investment-decision-heading"><div><small>SITE RESILIENCE ENGINE · PHYSICAL INVESTMENT</small><strong>Lowest-capital model candidate on the infrastructure Pareto frontier</strong></div><span>{investment.feasible ? "TARGET MET" : "TARGET UNRESOLVED"}</span></div>
+              <div className="investment-decision-grid">
+                <span><small>SOLAR</small><b>+{investment.investment.solarAddKW.toLocaleString()} kW</b></span>
+                <span><small>BATTERY</small><b>+{investment.investment.batteryAddKWh.toLocaleString()} kWh</b></span>
+                <span><small>GENERATOR</small><b>+{investment.investment.generatorAddKW.toLocaleString()} kW</b></span>
+                <span><small>DEMAND CONTROL</small><b>{investment.investment.demandControlPct}%</b></span>
+                <span><small>REFERENCE CAPEX</small><b>${investment.capex.toLocaleString()}</b></span>
+                <span><small>WORST HAZARD RISK</small><b>{investment.worstCriticalRiskPct.toFixed(1)}%</b></span>
+              </div>
+              <p>{optimized.investmentAnalysis.evaluatedCandidates} infrastructure portfolios × {optimized.investmentAnalysis.hazards.length} hazards on identical seeds. {optimized.investmentAnalysis.disclosure}</p>
+              <div className="uncertainty-separation">
+                <span><small>ALEATORIC</small><strong>Seeded futures</strong><p>{optimized.investmentAnalysis.uncertainty.aleatoric.sources.join(" · ")}</p></span>
+                <span><small>EPISTEMIC · MEASURE NEXT</small><strong>{optimized.investmentAnalysis.uncertainty.topPriority.label}</strong><p>{optimized.investmentAnalysis.uncertainty.topPriority.recommendedMeasurement}</p></span>
+                <span><small>DECISION RANGE</small><strong>{optimized.investmentAnalysis.uncertainty.topPriority.criticalRiskRangePct.toFixed(1)} risk pts</strong><p>{optimized.investmentAnalysis.uncertainty.topPriority.cvar95RangeKWh.toFixed(0)} kWh CVaR95 spread</p></span>
+              </div>
+            </section>;
+          })()}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <h4 className="text-[9px] tracking-wider text-slate-500 uppercase mb-1">Before</h4>

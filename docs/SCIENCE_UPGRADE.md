@@ -1,7 +1,8 @@
 # Science and evidence upgrade status
 
 This document covers the integrity upgrade, paired measured-day sampling,
-Evidence City placement and complete proof replay for engine **2.8.0**. The
+Evidence City placement, complete proof replay and the first Site Resilience
+Engine release for engine **3.0.0**. The
 research roadmap still includes work listed below. City objects express stored
 model evidence; their construction is a visualization of that evidence.
 
@@ -137,13 +138,51 @@ model, not external authenticity, field reliability or independent validation.
 Reports from incompatible model versions remain retained and are rejected for
 current-model replay rather than silently reinterpreted.
 
+### 9. Generator and clinical-service dispatch
+
+The executable 15-minute dispatch now carries generator start delay, finite
+fuel-energy state, failed start probability, forced-outage hazard, fuel cost and
+operational carbon. Hospital demand is divided into Tier 0 life safety, Tier 1
+time-critical clinical, Tier 2 operational and Tier 3 flexible service. When
+energy is insufficient, the model sheds Tier 3 upward and records each tier's
+unserved energy separately. Generator assumptions are configurable model inputs;
+they are not a claim about a named facility's installed equipment or fuel plan.
+
+### 10. Conditional scenario dependency
+
+Paired measured-day load/PV state, the selected weather regime, outage
+occurrence and restoration severity now share an explicit conditional draw.
+This removes the previous fully independent treatment of those major drivers.
+The method is labelled `CONDITIONAL_DEPENDENCY_V1`: it is transparent and
+deterministic, but it is not a fitted joint multivariate model and does not
+create seasonal or rare-event coverage absent from the source history.
+
+### 11. Physical investment Pareto search
+
+The optimizer now compares solar, battery, generator and demand-control
+portfolios on identical seeded futures across the requested hazards. It reports
+reference CAPEX, critical risk, CVaR95 unserved energy, operating cost, carbon
+and generator use, filters dominated portfolios and selects the least-reference-
+CAPEX feasible frontier candidate. If no portfolio meets the target, it returns
+an explicitly unresolved risk-first candidate. CAPEX coefficients are disclosed
+planning assumptions, not procurement quotes.
+
+### 12. Aleatoric/epistemic uncertainty and information priority
+
+The decision report now distinguishes seed-driven scenario variability
+(aleatoric) from uncertain model inputs (epistemic). On identical seeds it
+brackets restoration duration, demand growth, PV yield, usable battery capacity,
+generator reliability and clinical load, then ranks the measurement whose range
+most changes modeled critical risk and CVaR95. This is a sensitivity-based
+value-of-information screening score, not monetized EVPI, a confidence interval
+or proof that collecting the data changes real-world outcomes.
+
 ## Explicitly not completed
 
-- Joint measured weather/load/PV/outage modeling, seasonal/rare-event coverage,
+- Fully fitted joint measured weather/load/PV/outage modeling, seasonal/rare-event coverage,
   native five-minute commissioning and independently validated local calibration.
   The public reference still uses 96-slot average curves.
-- Generator start/fuel/failure dynamics, clinical load tiers, detailed EV
-  charging/vehicle state and thermal comfort dynamics.
+- Detailed EV charging/vehicle state and thermal comfort dynamics.
 - Cluster bootstrap, confidence intervals for CVaR/tail severity, broader
   sensitivity research and field validation of uncertainty assumptions.
 - Signed/witnessed evidence, encrypted remote evidence storage and durable
@@ -168,7 +207,12 @@ verify no duplicate growth. Run browser E2E and deployment checks separately;
 do not infer they passed from a unit suite or a successful build. Test counts
 and a smooth demonstration do not prove field reliability or scientific validity.
 
-### Reproducible manual QA cases for engine 2.8.0
+### Retained 2.8.0 manual QA history
+
+The cases below document the prior engine and must not be presented as 3.0
+results. Engine 3.0 rejects those manifests for current-model replay. Fresh
+browser run, optimization, reload and placement QA is required before calling a
+3.0 deployment release-verified.
 
 The following cases exercise the actual browser worker, not injected certificates:
 

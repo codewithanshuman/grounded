@@ -9,7 +9,9 @@
     "./decisionReadiness": "./src/decisionReadiness.ts",
     "./growth": "./src/growth.ts",
     "./evidenceCity": "./src/evidenceCity.ts",
-    "./proofReplay": "./src/proofReplay.ts"
+    "./proofReplay": "./src/proofReplay.ts",
+    "./investmentOptimizer": "./src/investmentOptimizer.ts",
+    "./uncertainty": "./src/uncertainty.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

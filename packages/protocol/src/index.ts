@@ -32,6 +32,17 @@ export const MicrogridConfig = z.object({
   gridRestorationMeanHours: z.number().min(0.25).max(72).default(4),
   gridEnergyCostPerKWh: z.number().min(0).default(0.11),
   gridCarbonKgPerKWh: z.number().min(0).default(0.71),
+  generatorCapacityKW: z.number().min(0).default(0),
+  generatorFuelCapacityKWh: z.number().min(0).default(0),
+  generatorStartDelayMinutes: z.number().min(0).max(120).default(5),
+  generatorStartFailurePct: z.number().min(0).max(100).default(2),
+  generatorForcedOutagePctPerHour: z.number().min(0).max(100).default(0.2),
+  generatorFuelCostPerKWh: z.number().min(0).default(0.28),
+  generatorCarbonKgPerKWh: z.number().min(0).default(0.74),
+  clinicalTier0Pct: z.number().min(0).max(100).default(30),
+  clinicalTier1Pct: z.number().min(0).max(100).default(40),
+  clinicalTier2Pct: z.number().min(0).max(100).default(20),
+  demandControlPct: z.number().min(0).max(50).default(0),
 });
 export type MicrogridConfig = z.infer<typeof MicrogridConfig>;
 
@@ -75,6 +86,24 @@ export const ScenarioResult = z.object({
   outageDurationHours: z.number(),
   cloudEventStartHour: z.number().nullable(),
   cloudEventDurationHours: z.number(),
+  generatorEnergyKWh: z.number().nonnegative().optional(),
+  generatorFuelRemainingKWh: z.number().nonnegative().optional(),
+  generatorStarts: z.number().int().nonnegative().optional(),
+  generatorFailedStart: z.boolean().optional(),
+  clinicalService: z.object({
+    tier0UnservedKWh: z.number().nonnegative(),
+    tier1UnservedKWh: z.number().nonnegative(),
+    tier2UnservedKWh: z.number().nonnegative(),
+    tier3UnservedKWh: z.number().nonnegative(),
+  }).optional(),
+  scenarioConditioning: z.object({
+    method: z.literal("CONDITIONAL_DEPENDENCY_V1"),
+    measuredHighLoadShare: z.number().min(0).max(1),
+    measuredLowPvShare: z.number().min(0).max(1),
+    outageProbability: z.number().min(0).max(1),
+    restorationStressMultiplier: z.number().nonnegative(),
+    disclosure: z.string(),
+  }).optional(),
   profileSampling: z.object({
     mode: z.enum(["PAIRED_EMPIRICAL_DAYS", "AVERAGE_REFERENCE_PROFILE", "REPRESENTATIVE_ENGINEERING"]),
     method: z.enum(["CONSECUTIVE_3DAY_BLOCK", "INDEPENDENT_DAY_WITH_REPLACEMENT", "REPEATED_AVERAGE_DAY", "SYNTHETIC_PROFILES"]),
@@ -396,6 +425,11 @@ export const RunMetrics = z.object({
   cvar99TotalUnservedKWh: z.number().optional(),
   meanLossOfLoadEvents: z.number().optional(),
   meanPeakCriticalShortfallKW: z.number().optional(),
+  meanGeneratorEnergyKWh: z.number().optional(),
+  meanTier0UnservedKWh: z.number().optional(),
+  meanTier1UnservedKWh: z.number().optional(),
+  meanTier2UnservedKWh: z.number().optional(),
+  meanTier3UnservedKWh: z.number().optional(),
 });
 export type RunMetrics = z.infer<typeof RunMetrics>;
 

@@ -9,6 +9,7 @@ import { OptimizationRequest, validationCohortSize } from "@verdant/protocol/req
 import { PlacementRequest } from "@verdant/protocol/city";
 import { OptimizationEvidence as OptimizationEvidenceSchema } from "@verdant/protocol/evidence";
 import { applyMilestonePlacement } from "@verdant/sim/evidenceCity";
+import { optimizeInfrastructure } from "@verdant/sim/investmentOptimizer";
 import {
   DEFAULT_INTERVENTION, LOCATIONS, PRESET_ORDER, MODEL_VERSION, analyzeInterventions, analyzeSensitivity,
   locationFromCalibration, locationWithSiteData, runMonteCarlo, toRunSummary, validateIntervention,
@@ -23,6 +24,12 @@ const measuredReference = SiteDataProfileSchema.parse(measuredReferenceJson);
 const profiles = new Map<string, SiteDataProfile>([[measuredReference.id, measuredReference]]);
 const runs = new Map<string, RunSummary>();
 const optimizationProofs = new Map<string, { baseline: RunSummary; optimization: ReturnType<typeof OptimizationEvidenceSchema.parse> }>();
+type DeterministicSearchArtifacts = {
+  analysis: ReturnType<typeof analyzeInterventions>;
+  validation: ReturnType<typeof validateIntervention>;
+  investmentAnalysis: ReturnType<typeof optimizeInfrastructure>;
+};
+const searchArtifacts = new Map<string, DeterministicSearchArtifacts>();
 let world: WorldState = { trees: [], buildings: [], totalRuns: 0, totalFuturesSimulated: 0, bestImprovementPct: 0 };
 
 function calibrationFor(location: LocationId): ClimateCalibration {
@@ -113,9 +120,25 @@ function runOptimization(args: Record<string, unknown>) {
   const targetPct = request.riskTargetPct;
   const baselineSeedOffset = before.manifest?.seedOffset ?? 0;
   const discoverySeedOffset = baselineSeedOffset + before.n;
-  const analysis = analyzeInterventions(location, before.preset, before.config, 300, discoverySeedOffset, PRESET_ORDER, targetPct);
+  const searchKey = `${before.manifest?.runFingerprint ?? JSON.stringify([before.location, before.preset, before.config, before.n, baselineSeedOffset])}:${targetPct}`;
+  let artifacts = searchArtifacts.get(searchKey);
+  if (!artifacts) {
+    const analysis = analyzeInterventions(location, before.preset, before.config, 300, discoverySeedOffset, PRESET_ORDER, targetPct);
+    const intervention = analysis.best.intervention;
+    const investmentAnalysis = optimizeInfrastructure(location, before.preset, before.config, {
+      sampleSizePerHazard: 20, seedOffset: discoverySeedOffset + 100_000, hazards: PRESET_ORDER,
+      targetCriticalRiskPct: targetPct, intervention,
+      solarOptionsKW: [0, 1_200], batteryOptionsKWh: [0, 6_000],
+      generatorOptionsKW: [0, 800], demandControlOptionsPct: [0, 20],
+    });
+    const validation = validateIntervention(location, before.config, intervention, discoverySeedOffset + 10_000,
+      validationCohortSize(targetPct, PRESET_ORDER.length), PRESET_ORDER,
+      analysis.frontier.map((candidate) => candidate.intervention), targetPct);
+    artifacts = { analysis, validation, investmentAnalysis };
+    searchArtifacts.set(searchKey, artifacts);
+  }
+  const { analysis, validation, investmentAnalysis } = artifacts;
   const intervention = analysis.best.intervention;
-  const validation = validateIntervention(location, before.config, intervention, discoverySeedOffset + 10_000, validationCohortSize(targetPct, PRESET_ORDER.length), PRESET_ORDER, analysis.frontier.map((candidate) => candidate.intervention), targetPct);
   const mc = runMonteCarlo(before.n, location, before.preset, before.config, intervention, baselineSeedOffset);
   const after = toRunSummary(crypto.randomUUID(), mc, calibration, undefined, baselineSeedOffset, before.siteData);
   runs.set(after.runId, after);
@@ -144,7 +167,7 @@ function runOptimization(args: Record<string, unknown>) {
   const growthEvents = transition.events;
   const growthAssessment = { eligible: transition.verdict.eligible, targetPct, pairedSupport: transition.verdict.pairedSupport,
     status: transition.verdict.readiness?.status ?? "evidence", reasons: transition.verdict.reasons };
-  return { intervention, result: after, growthEvents, growthAssessment, analysis, validation, historicalBacktest, world };
+  return { intervention, result: after, growthEvents, growthAssessment, analysis, validation, historicalBacktest, investmentAnalysis, world };
 }
 
 function placeMilestone(args: Record<string, unknown>) {

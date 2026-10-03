@@ -4,7 +4,7 @@ import { buildTerrain } from "../src/reference-city/layouts/terrain";
 import { CITY_SIZE, FOREST_PLOTS, LANDMARK_SITES, RESERVE, RESERVE_STRUCTURES, insideLandmark, insideReserveStructure, reserveDistance, reserveTrail } from "../src/game/landmarks/worldLayout";
 import { CITY_PLOTS, CITY_VARIANTS, LEGACY_EVIDENCE_PLOTS, type CityProofSummary } from "@verdant/protocol/city";
 import type { Building, WorldState } from "@verdant/protocol";
-import { constructionReceipt, inspectionClickIsValid, nextEvidenceOrientation, placementClickIsValid, placementVerdict, plotAtGrid, renderedBuildingPlot } from "../src/game/evidenceCity/placementModel";
+import { constructionReceipt, evidencePlotPresentation, inspectionClickIsValid, nextEvidenceOrientation, placementClickIsValid, placementVerdict, plotAtGrid, renderedBuildingPlot } from "../src/game/evidenceCity/placementModel";
 import { evidenceVisualStyle, orientationFront } from "../src/game/evidenceCity/visualVariants";
 import { createIsoProjection, TILE_WIDTH, TILE_HEIGHT } from "../src/reference-city/math/iso";
 
@@ -189,6 +189,17 @@ describe("Evidence city placement renderer contract", () => {
     expect(placementVerdict(world(), plan, CITY_PLOTS[3]).eligible).toBe(false);
     expect(placementVerdict({ ...world(), pendingMilestones: [] }, plan, CITY_PLOTS[0]).eligible).toBe(false);
     expect(placementVerdict(world(), { ...plan, variantId: "not-a-design" }, CITY_PLOTS[0]).eligible).toBe(false);
+  });
+
+  it("keeps unrelated plots landscaped and clears only the selected eligible plot", () => {
+    const current = world();
+    expect(evidencePlotPresentation(current, plan, CITY_PLOTS[0], CITY_PLOTS[0].id)).toBe("SELECTED");
+    expect(evidencePlotPresentation(current, plan, CITY_PLOTS[1], CITY_PLOTS[0].id)).toBe("ELIGIBLE");
+    expect(evidencePlotPresentation(current, plan, CITY_PLOTS[3], CITY_PLOTS[0].id)).toBe("UNRELATED");
+    expect(evidencePlotPresentation(current, null, CITY_PLOTS[0])).toBe("UNRELATED");
+    const occupied: Building = { ...legacyBuilding, kind: "reservoir", family: "storage", milestoneId: "old-milestone",
+      variantId: plan.variantId, plotId: CITY_PLOTS[0].id, level: 1, rotation: 0, proof };
+    expect(evidencePlotPresentation({ ...current, buildings: [occupied] }, plan, CITY_PLOTS[0], CITY_PLOTS[0].id)).toBe("OCCUPIED");
   });
 
   it("upgrades a registered family building only in its retained seat", () => {

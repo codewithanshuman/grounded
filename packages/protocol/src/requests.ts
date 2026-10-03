@@ -5,6 +5,8 @@ const config = MicrogridConfig.superRefine((value, context) => {
   if (!Object.values(value).every(Number.isFinite)) context.addIssue({ code: "custom", message: "Every physical parameter must be finite." });
   if (!Number.isInteger(value.homesCount) || !Number.isInteger(value.evCount)) context.addIssue({ code: "custom", message: "Homes and EV chargers must be whole numbers." });
   if (value.batteryCapacityKWh > 0 && value.batteryStartPct < value.batteryMinSocPct) context.addIssue({ code: "custom", message: "Starting battery charge is below the minimum safe charge." });
+  if (value.clinicalTier0Pct + value.clinicalTier1Pct + value.clinicalTier2Pct > 100) context.addIssue({ code: "custom", message: "Clinical Tier 0, 1 and 2 shares cannot exceed 100%." });
+  if (value.generatorCapacityKW > 0 && value.generatorFuelCapacityKWh <= 0) context.addIssue({ code: "custom", message: "A configured generator needs a positive usable fuel-energy budget." });
 });
 export const SimulationRequest = z.object({
   location: LocationId, preset: PresetId, config,

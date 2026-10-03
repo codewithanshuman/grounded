@@ -10,6 +10,7 @@ import type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placem
 import type { EvidencePlacementStatus } from "./evidenceCity/EvidenceCityPlacement";
 import type { EvidenceConstructionStatus } from "./evidenceCity/EvidenceConstruction";
 import "./evidenceCity/evidence-city.css";
+import { detectWorldPerformanceProfile } from "./performanceProfile";
 export type { EvidenceBuildPlan, EvidencePlacement } from "./evidenceCity/placementModel";
 
 const DISTRICTS: ReadonlyArray<{ id: CityView; label: string; detail: string }> = [
@@ -52,6 +53,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
   const [railStatus, setRailStatus] = useState<RailStatus | null>(null);
   const [placementStatus, setPlacementStatus] = useState<EvidencePlacementStatus | null>(null);
   const [constructionStatus, setConstructionStatus] = useState<EvidenceConstructionStatus[]>([]);
+  const performanceProfile = detectWorldPerformanceProfile();
   const gameRef = useRef<Phaser.Game | null>(null);
   const sceneRef = useRef<GroundedCityScene | null>(null);
   const inspectRef = useRef(onInspect);
@@ -85,8 +87,8 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
       backgroundColor: "#2e9fe0",
       scene,
       scale: { mode: Phaser.Scale.RESIZE },
-      fps: { target: 60 },
-      render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: true, powerPreference: "high-performance" },
+      fps: { target: performanceProfile.targetFps },
+      render: { antialias: false, pixelArt: true, roundPixels: true, clearBeforeRender: true, powerPreference: performanceProfile.powerPreference },
     });
     gameRef.current = game;
     let disposed = false;
@@ -143,7 +145,7 @@ export function GameCanvas({ world, pendingGrowth, activity, onInspect, onReady,
     sceneRef.current?.showDistrict(view);
   };
 
-  return <div className="world-viewport">
+  return <div className="world-viewport" data-render-quality={performanceProfile.mode.toLowerCase()}>
     <div ref={containerRef} className="world-renderer" />
     <div className="world-atmosphere" aria-hidden="true" />
     <nav className={`world-navigation${districtMenuOpen ? " is-open" : ""}`} aria-label="Explore city districts">

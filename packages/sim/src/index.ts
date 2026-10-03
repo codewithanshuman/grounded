@@ -9,7 +9,7 @@ import type { ClimateCalibration, ClimateMonth, Intervention, LocationId, Microg
 
 export const DT = 0.25; // hours per simulated step
 export const STEPS = 288; // 72h / 15min: three-day compound-event horizon
-export const MODEL_VERSION = "2.8.0";
+export const MODEL_VERSION = "3.0.0";
 
 function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
@@ -345,6 +345,17 @@ export const DEFAULT_CONFIG: MicrogridConfig = {
   gridRestorationMeanHours: 4,
   gridEnergyCostPerKWh: 0.11,
   gridCarbonKgPerKWh: 0.71,
+  generatorCapacityKW: 0,
+  generatorFuelCapacityKWh: 0,
+  generatorStartDelayMinutes: 5,
+  generatorStartFailurePct: 2,
+  generatorForcedOutagePctPerHour: 0.2,
+  generatorFuelCostPerKWh: 0.28,
+  generatorCarbonKgPerKWh: 0.74,
+  clinicalTier0Pct: 30,
+  clinicalTier1Pct: 40,
+  clinicalTier2Pct: 20,
+  demandControlPct: 0,
 };
 export const DEFAULT_INTERVENTION: Intervention = { reservePct: 0, evDelayMin: 0, precoolHour: null };
 
@@ -363,6 +374,7 @@ export interface SimStep {
   gridUsedKW: number;
   batteryDischargeKW: number;
   batteryChargeKW: number;
+  generatorKW: number;
   curtailedSolarKW: number;
   energyBalanceErrorKWh: number;
   failed: boolean;
@@ -403,6 +415,10 @@ export function simulateScenario(
   const chargeEfficiency = Math.sqrt(roundTripEfficiency);
   const dischargeEfficiency = Math.sqrt(roundTripEfficiency);
   const severity = (rng() + rng() + rng()) / 3;
+  const measuredHighLoadShare = measuredDays.length
+    ? measuredDays.filter((day) => day.highLoad).length / measuredDays.length : 0;
+  const measuredLowPvShare = measuredDays.length
+    ? measuredDays.filter((day) => day.lowPvOutput).length / measuredDays.length : 0;
 
   const cloudBase = clamp(location.cloudBase + (rng() - 0.5) * 0.1, 0, 0.9);
   const cloudEvent = rng() < P.cloudEventProb;
@@ -415,7 +431,14 @@ export function simulateScenario(
   const outageProbability = measured72HourOutageProbability == null
     ? P.outageProbBase
     : measured72HourOutageProbability * (P.outageProbBase / PRESETS.normal.outageProbBase);
-  const outageOccurs = rng() < clamp(outageProbability * (0.65 + severity), 0, 0.97);
+  // The operational day, weather regime and outage are one conditioned draw.
+  // This is deliberately labelled V1: it introduces dependency without claiming
+  // a fully empirical multivariate weather/load/PV/outage model.
+  const conditionalOutageMultiplier = 0.55 + severity * 0.7
+    + measuredHighLoadShare * 0.22 + measuredLowPvShare * 0.14
+    + (P.stormSolarFactor < 1 ? 0.24 : 0) + (P.tempAdd >= 5 ? 0.1 : 0);
+  const conditionedOutageProbability = clamp(outageProbability * conditionalOutageMultiplier, 0, 0.97);
+  const outageOccurs = rng() < conditionedOutageProbability;
   const outageStart = P.stormSolarFactor < 1 && cloudEvent ? cloudEventStart + rng() * 3 : 10 + rng() * 48;
   const restorationU = rng();
   const observedRestoration = measuredReliability?.durationQuantilesHours;
@@ -426,13 +449,19 @@ export function simulateScenario(
     ? observedRestoration[observedLower] * (1 - observedFraction) + observedRestoration[Math.min(observedRestoration.length - 1, observedLower + 1)] * observedFraction
     : -Math.log(Math.max(1e-6, 1 - restorationU)) * (measuredReliability?.meanRestorationHours ?? config.gridRestorationMeanHours);
   const restorationStressMultiplier = observedRestoration
-    ? (0.75 + severity * 0.5) * (P.stormSolarFactor < 1 ? 1.35 : 1)
-    : (0.7 + severity * 1.4) * (P.stormSolarFactor < 1 ? 1.45 : 1);
+    ? (0.75 + severity * 0.5 + measuredHighLoadShare * .08) * (P.stormSolarFactor < 1 ? 1.35 : 1)
+    : (0.7 + severity * 1.4 + measuredHighLoadShare * .12 + measuredLowPvShare * .08) * (P.stormSolarFactor < 1 ? 1.45 : 1);
   const outageDur = outageOccurs
     ? clamp(baseRestorationHours * restorationStressMultiplier, 0.5, 36)
     : 0;
   const tempBase = location.baseTemp + P.tempAdd;
   const evPeakHour = 18.5 + intervention.evDelayMin / 60;
+  const tier0Share = config.clinicalTier0Pct / 100;
+  const tier1Share = config.clinicalTier1Pct / 100;
+  const tier2Share = config.clinicalTier2Pct / 100;
+  const tier3Share = Math.max(0, 1 - tier0Share - tier1Share - tier2Share);
+  const generatorStartWillFail = config.generatorCapacityKW > 0
+    && rng() < config.generatorStartFailurePct / 100;
 
   let minSocPct = 100;
   let cause = "None";
@@ -457,6 +486,17 @@ export function simulateScenario(
   let lossOfLoadEvents = 0;
   let peakCriticalShortfallKW = 0;
   let previousStepFailed = false;
+  let generatorFuelE = config.generatorFuelCapacityKWh;
+  let generatorEnergyKWh = 0;
+  let generatorStarts = 0;
+  let generatorRequestedSteps = 0;
+  let generatorStartAttempted = false;
+  let generatorOnline = false;
+  let generatorForcedOut = false;
+  let tier0UnservedKWh = 0;
+  let tier1UnservedKWh = 0;
+  let tier2UnservedKWh = 0;
+  let tier3UnservedKWh = 0;
   const steps: SimStep[] = [];
 
   for (let t = 0; t < STEPS; t++) {
@@ -497,14 +537,29 @@ export function simulateScenario(
     }
     const residentialNoise = 0.95 + rng() * 0.1;
     if (!measuredDay) resKW *= residentialNoise;
+    resKW *= 1 - config.demandControlPct / 100;
 
     const evFactor = 0.05 + 0.55 * gaussian(dayHour, evPeakHour, 1.6);
-    const evKW = evCount * config.evChargerKW * evFactor;
+    const evKW = evCount * config.evChargerKW * evFactor * (1 - config.demandControlPct / 200);
     const hospKW = config.hospitalKW * (0.97 + rng() * 0.06);
 
     const solarGeneratedE = solarKW * DT;
     const hospitalDemandE = hospKW * DT;
     const flexibleDemandE = (resKW + evKW) * DT;
+    const generatorNeeded = !gridOnline && hospitalDemandE + flexibleDemandE > solarGeneratedE + 1e-6
+      && config.generatorCapacityKW > 0 && generatorFuelE > 0 && !generatorForcedOut;
+    if (generatorNeeded) {
+      if (!generatorStartAttempted) { generatorStartAttempted = true; generatorStarts += 1; }
+      generatorRequestedSteps += 1;
+      const delaySteps = Math.ceil(config.generatorStartDelayMinutes / (DT * 60));
+      if (!generatorStartWillFail && generatorRequestedSteps > delaySteps) generatorOnline = true;
+    }
+    if (generatorOnline && rng() < (config.generatorForcedOutagePctPerHour / 100) * DT) {
+      generatorOnline = false;
+      generatorForcedOut = true;
+    }
+    let generatorE = generatorOnline ? Math.min(config.generatorCapacityKW * DT, generatorFuelE) : 0;
+    const generatorAvailableE = generatorE;
     totalDemandEnergyKWh += hospitalDemandE + flexibleDemandE;
     let solarE = solarGeneratedE;
     let gridE = gridCapE;
@@ -514,6 +569,7 @@ export function simulateScenario(
     const hFromSolar = Math.min(hospNeed, solarE); solarE -= hFromSolar; hospNeed -= hFromSolar;
     const hFromGrid = Math.min(hospNeed, gridE); gridE -= hFromGrid; hospNeed -= hFromGrid;
     gridEnergyKWh += hFromGrid;
+    const hFromGenerator = Math.min(hospNeed, generatorE); generatorE -= hFromGenerator; hospNeed -= hFromGenerator;
     const hFromBattery = Math.min(hospNeed, Math.max(0, E - physicalFloor) * dischargeEfficiency, dischargeDeliveryRemaining);
     const hBatteryWithdrawal = hFromBattery / dischargeEfficiency;
     const hRenewableWithdrawal = E > 0 ? Math.min(renewableStoredE, hBatteryWithdrawal * (renewableStoredE / E)) : 0;
@@ -525,13 +581,26 @@ export function simulateScenario(
     hospNeed -= hFromBattery;
     directSolarToLoadKWh += hFromSolar;
 
-    const stepFailed = hospNeed > 1e-6;
+    // Unserved hospital energy is shed from Tier 3 upward, preserving life
+    // safety and time-critical clinical services for as long as physics allows.
+    let clinicalLossRemaining = Math.max(0, hospNeed);
+    const tier3Loss = Math.min(clinicalLossRemaining, hospitalDemandE * tier3Share); clinicalLossRemaining -= tier3Loss;
+    const tier2Loss = Math.min(clinicalLossRemaining, hospitalDemandE * tier2Share); clinicalLossRemaining -= tier2Loss;
+    const tier1Loss = Math.min(clinicalLossRemaining, hospitalDemandE * tier1Share); clinicalLossRemaining -= tier1Loss;
+    const tier0Loss = Math.min(clinicalLossRemaining, hospitalDemandE * tier0Share);
+    tier0UnservedKWh += tier0Loss;
+    tier1UnservedKWh += tier1Loss;
+    tier2UnservedKWh += tier2Loss;
+    tier3UnservedKWh += tier3Loss;
+    shedEnergyKWh += tier2Loss + tier3Loss;
+    const criticalClinicalLoss = tier0Loss + tier1Loss;
+    const stepFailed = criticalClinicalLoss > 1e-6;
     if (stepFailed) {
-      criticalEnergyUnservedKWh += hospNeed;
+      criticalEnergyUnservedKWh += criticalClinicalLoss;
       criticalLossDurationHours += DT;
       currentCriticalLossStreakHours += DT;
       maxCriticalLossStreakHours = Math.max(maxCriticalLossStreakHours, currentCriticalLossStreakHours);
-      peakCriticalShortfallKW = Math.max(peakCriticalShortfallKW, hospNeed / DT);
+      peakCriticalShortfallKW = Math.max(peakCriticalShortfallKW, criticalClinicalLoss / DT);
       if (!previousStepFailed) lossOfLoadEvents++;
       if (!failed) { failed = true; failStep = t; }
       if (!gridOnline) cause = "Grid outage";
@@ -547,6 +616,7 @@ export function simulateScenario(
     const ncFromSolar = Math.min(ncNeed, solarE); solarE -= ncFromSolar; ncNeed -= ncFromSolar;
     const ncFromGrid = Math.min(ncNeed, gridE); gridE -= ncFromGrid; ncNeed -= ncFromGrid;
     gridEnergyKWh += ncFromGrid;
+    const ncFromGenerator = Math.min(ncNeed, generatorE); generatorE -= ncFromGenerator; ncNeed -= ncFromGenerator;
     const flexibleFloor = Math.max(physicalFloor, reserveEnergy);
     const ncFromBattery = Math.min(ncNeed, Math.max(0, E - flexibleFloor) * dischargeEfficiency, dischargeDeliveryRemaining);
     const ncBatteryWithdrawal = ncFromBattery / dischargeEfficiency;
@@ -558,6 +628,11 @@ export function simulateScenario(
     ncNeed -= ncFromBattery;
     shedEnergyKWh += Math.max(0, ncNeed);
     directSolarToLoadKWh += ncFromSolar;
+
+    const generatorUsedE = generatorAvailableE - generatorE;
+    generatorFuelE = Math.max(0, generatorFuelE - generatorUsedE);
+    generatorEnergyKWh += generatorUsedE;
+    if (generatorFuelE <= 1e-9) generatorOnline = false;
 
     let batteryChargeInput = 0;
     if (solarE > 0) {
@@ -572,13 +647,14 @@ export function simulateScenario(
     renewableStoredE = clamp(renewableStoredE, 0, E);
 
     const gridUsedE = hFromGrid + ncFromGrid;
+    const generatorUsedForBalanceE = hFromGenerator + ncFromGenerator;
     const batteryDeliveredE = hFromBattery + ncFromBattery;
     const hospitalServedE = hospitalDemandE - Math.max(0, hospNeed);
     const flexibleServedE = flexibleDemandE - Math.max(0, ncNeed);
     const curtailedSolarE = Math.max(0, solarE);
     solarCurtailedKWh += curtailedSolarE;
     const energyBalanceErrorKWh = Math.abs(
-      solarGeneratedE + gridUsedE + batteryDeliveredE -
+      solarGeneratedE + gridUsedE + generatorUsedForBalanceE + batteryDeliveredE -
       hospitalServedE - flexibleServedE - batteryChargeInput - curtailedSolarE,
     );
     maxEnergyBalanceErrorKWh = Math.max(maxEnergyBalanceErrorKWh, energyBalanceErrorKWh);
@@ -597,6 +673,7 @@ export function simulateScenario(
         shedKW: Math.max(0, ncNeed) / DT,
         criticalShedKW: Math.max(0, hospNeed) / DT,
         gridUsedKW: gridUsedE / DT,
+        generatorKW: generatorUsedForBalanceE / DT,
         batteryDischargeKW: batteryDeliveredE / DT,
         batteryChargeKW: batteryChargeInput / DT,
         curtailedSolarKW: curtailedSolarE / DT,
@@ -608,8 +685,11 @@ export function simulateScenario(
   }
 
   const bucket: RiskBucket = failed ? "critical" : minSocPct <= 15 ? "high" : minSocPct <= 40 ? "moderate" : "safe";
-  const operationalCost = gridEnergyKWh * config.gridEnergyCostPerKWh + batteryThroughputKWh * config.batteryDegradationCostPerKWh;
-  const carbonKg = gridEnergyKWh * config.gridCarbonKgPerKWh;
+  const operationalCost = gridEnergyKWh * config.gridEnergyCostPerKWh
+    + generatorEnergyKWh * config.generatorFuelCostPerKWh
+    + batteryThroughputKWh * config.batteryDegradationCostPerKWh;
+  const carbonKg = gridEnergyKWh * config.gridCarbonKgPerKWh
+    + generatorEnergyKWh * config.generatorCarbonKgPerKWh;
   const renewableServedKWh = directSolarToLoadKWh + solarChargedBatteryToLoadKWh;
   const avoidedGridCarbonKg = renewableServedKWh * config.gridCarbonKgPerKWh;
   const energyBalanceErrorPct = totalDemandEnergyKWh > 0 ? (maxEnergyBalanceErrorKWh / totalDemandEnergyKWh) * 100 : 0;
@@ -622,6 +702,13 @@ export function simulateScenario(
     avoidedGridCarbonKg, hazardSeverity: severity,
     outageStartHour: outageOccurs ? outageStart : null, outageDurationHours: outageDur,
     cloudEventStartHour: cloudEvent ? cloudEventStart : null, cloudEventDurationHours: cloudEvent ? cloudEventDur : 0,
+    generatorEnergyKWh, generatorFuelRemainingKWh: generatorFuelE, generatorStarts, generatorFailedStart: generatorStartAttempted && generatorStartWillFail,
+    clinicalService: { tier0UnservedKWh, tier1UnservedKWh, tier2UnservedKWh, tier3UnservedKWh },
+    scenarioConditioning: {
+      method: "CONDITIONAL_DEPENDENCY_V1", measuredHighLoadShare, measuredLowPvShare,
+      outageProbability: conditionedOutageProbability, restorationStressMultiplier,
+      disclosure: "Weather regime, paired measured-day load/PV state, outage occurrence and restoration severity are conditioned together. This is a transparent dependency model, not a fitted multivariate site outage model.",
+    },
     profileSampling: {
       mode: measuredDays.length ? "PAIRED_EMPIRICAL_DAYS" : location.siteData ? "AVERAGE_REFERENCE_PROFILE" : "REPRESENTATIVE_ENGINEERING",
       method: measuredDays.length ? (measuredDayPool(location.siteData)!.blocks.length ? "CONSECUTIVE_3DAY_BLOCK" : "INDEPENDENT_DAY_WITH_REPLACEMENT") : location.siteData ? "REPEATED_AVERAGE_DAY" : "SYNTHETIC_PROFILES",
@@ -666,6 +753,11 @@ export interface MonteCarloResult {
     cvar99TotalUnservedKWh: number;
     meanLossOfLoadEvents: number;
     meanPeakCriticalShortfallKW: number;
+    meanGeneratorEnergyKWh: number;
+    meanTier0UnservedKWh: number;
+    meanTier1UnservedKWh: number;
+    meanTier2UnservedKWh: number;
+    meanTier3UnservedKWh: number;
     maxEnergyBalanceErrorKWh: number;
     energyBalanceErrorPct: number;
   };
@@ -701,6 +793,11 @@ export function runMonteCarlo(
   let anyUnservedCount = 0;
   let totalLossOfLoadEvents = 0;
   let totalPeakCriticalShortfallKW = 0;
+  let totalGeneratorEnergyKWh = 0;
+  let totalTier0UnservedKWh = 0;
+  let totalTier1UnservedKWh = 0;
+  let totalTier2UnservedKWh = 0;
+  let totalTier3UnservedKWh = 0;
   let maxEnergyBalanceErrorKWh = 0;
   let energyBalanceErrorPct = 0;
   let finiteOutputs = true;
@@ -728,6 +825,11 @@ export function runMonteCarlo(
     if (r.shedEnergyKWh + r.criticalEnergyUnservedKWh > 1e-6) anyUnservedCount++;
     totalLossOfLoadEvents += r.lossOfLoadEvents;
     totalPeakCriticalShortfallKW += r.peakCriticalShortfallKW;
+    totalGeneratorEnergyKWh += r.generatorEnergyKWh ?? 0;
+    totalTier0UnservedKWh += r.clinicalService?.tier0UnservedKWh ?? 0;
+    totalTier1UnservedKWh += r.clinicalService?.tier1UnservedKWh ?? 0;
+    totalTier2UnservedKWh += r.clinicalService?.tier2UnservedKWh ?? 0;
+    totalTier3UnservedKWh += r.clinicalService?.tier3UnservedKWh ?? 0;
     maxEnergyBalanceErrorKWh = Math.max(maxEnergyBalanceErrorKWh, r.energyBalanceMaxErrorKWh);
     energyBalanceErrorPct = Math.max(energyBalanceErrorPct, r.energyBalanceErrorPct);
     finiteOutputs = finiteOutputs && [r.minSocPct, r.shedEnergyKWh, r.criticalEnergyUnservedKWh, r.operationalCost, r.carbonKg, r.criticalLossDurationHours, r.solarCurtailedKWh, r.renewableServedKWh].every(Number.isFinite);
@@ -795,6 +897,11 @@ export function runMonteCarlo(
       cvar99TotalUnservedKWh: round1(cvar99TotalUnservedKWh),
       meanLossOfLoadEvents: Math.round((totalLossOfLoadEvents / n) * 100) / 100,
       meanPeakCriticalShortfallKW: round1(totalPeakCriticalShortfallKW / n),
+      meanGeneratorEnergyKWh: round1(totalGeneratorEnergyKWh / n),
+      meanTier0UnservedKWh: round1(totalTier0UnservedKWh / n),
+      meanTier1UnservedKWh: round1(totalTier1UnservedKWh / n),
+      meanTier2UnservedKWh: round1(totalTier2UnservedKWh / n),
+      meanTier3UnservedKWh: round1(totalTier3UnservedKWh / n),
       maxEnergyBalanceErrorKWh,
       energyBalanceErrorPct,
     },

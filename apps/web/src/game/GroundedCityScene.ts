@@ -25,7 +25,7 @@ import { onNorthCityApproach } from "./districts/northBridgeModel";
 import { bakeBuilding } from "../reference-city/textures/buildings";
 import { EvidenceCityPlacement, type EvidencePlacementHandlers } from "./evidenceCity/EvidenceCityPlacement";
 import { EvidenceConstruction, type EvidenceConstructionStatus } from "./evidenceCity/EvidenceConstruction";
-import { catalogPlotFor, evidenceVariant, inspectionClickIsValid, renderedBuildingPlot, type EvidenceBuildPlan } from "./evidenceCity/placementModel";
+import { catalogPlotFor, evidencePlotPresentation, evidenceVariant, inspectionClickIsValid, renderedBuildingPlot, type EvidenceBuildPlan } from "./evidenceCity/placementModel";
 import { evidenceVisualStyle, orientationFront } from "./evidenceCity/visualVariants";
 import { isCanvasPointer } from "../reference-city/world/utils/pointerUtils";
 
@@ -106,6 +106,7 @@ export class GroundedCityScene extends WorldScene {
   private railway?: RailSystem;
   private railStatusHandler?: (status: RailStatus) => void;
   private buildPlan: EvidenceBuildPlan | null = null;
+  private focusedEvidencePlotId?: string;
   private placement?: EvidenceCityPlacement;
   private placementHandlers: EvidencePlacementHandlers = {};
   private evidenceConstruction?: EvidenceConstruction;
@@ -133,7 +134,14 @@ export class GroundedCityScene extends WorldScene {
     bakeTextures(this);
     bakeArchitecture(this);
     bakeEnergy(this);
-    this.placement = new EvidenceCityPlacement(this, () => this.latestWorld, () => this.terrainManager.terrain);
+    this.placement = new EvidenceCityPlacement(this, () => this.latestWorld, () => this.terrainManager.terrain, (plotId) => {
+      if (plotId === this.focusedEvidencePlotId) return;
+      this.focusedEvidencePlotId = plotId;
+      if (this.latestWorld) {
+        this.refreshContextProps();
+        this.refreshEvidencePlotScenery(this.latestWorld);
+      }
+    });
     this.placement.setHandlers(this.placementHandlers);
     this.placement.setPlan(this.buildPlan);
     this.evidenceConstruction = new EvidenceConstruction(this, `crew:${workerUrl}`);
@@ -207,6 +215,7 @@ export class GroundedCityScene extends WorldScene {
   setBuildPlan(plan: EvidenceBuildPlan | null): void {
     const newlySelected = !!plan && plan.milestoneId !== this.buildPlan?.milestoneId;
     this.buildPlan = plan;
+    if (!plan) this.focusedEvidencePlotId = undefined;
     this.placement?.setPlan(plan);
     if (this.latestWorld) {
       this.refreshContextProps();
@@ -300,7 +309,9 @@ export class GroundedCityScene extends WorldScene {
       const approach=x>=-6.5&&x<=0.5&&Math.abs(y-12)<1;
       const energy=x>=43.5&&x<=46.5&&y>=1&&y<=34;
       const evidencePlot=CITY_PLOTS.find(plot=>Math.abs(plot.gx-x)<.6&&Math.abs(plot.gy-y)<.6);
-      const evidenceSeat=!!evidencePlot && (!!this.buildPlan || occupiedPlots.has(evidencePlot.id));
+      const evidenceState=evidencePlot && this.latestWorld
+        ? evidencePlotPresentation(this.latestWorld, this.buildPlan, evidencePlot, this.focusedEvidencePlotId) : undefined;
+      const evidenceSeat=evidenceState === "OCCUPIED" || evidenceState === "SELECTED";
       const infillSeat=this.urbanInfillSites.some(([gx,gy])=>Math.abs(gx-x)<.6&&Math.abs(gy-y)<.6);
       const contextClear=insideLandmark(x,y)||approach||energy||infillSeat||inRailCorridor(x,y)||onNorthCityApproach(x,y,.5);
       // Empty evidence seats remain landscaped. Scatter is hidden only during
@@ -313,11 +324,11 @@ export class GroundedCityScene extends WorldScene {
   private refreshEvidencePlotScenery(world: WorldState): void {
     this.evidencePlotScenery.forEach((object) => object.destroy());
     this.evidencePlotScenery = [];
-    if (this.buildPlan) return;
     const occupied = new Set(world.buildings.map((building) => catalogPlotFor(building)?.id)
       .filter((id) => id !== undefined));
     for (const [index, plot] of CITY_PLOTS.entries()) {
-      if (occupied.has(plot.id)) continue;
+      const presentation = evidencePlotPresentation(world, this.buildPlan, plot, this.focusedEvidencePlotId);
+      if (occupied.has(plot.id) || presentation === "SELECTED") continue;
       const garden = this.add.graphics().setDepth(GROUND_DEPTH + 28);
       const corners = [[-.46,-.46],[.46,-.46],[.46,.46],[-.46,.46]]
         .map(([dx,dy]) => projection.project(plot.gx + dx!, plot.gy + dy!));

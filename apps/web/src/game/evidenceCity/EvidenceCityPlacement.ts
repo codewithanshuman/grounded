@@ -33,7 +33,8 @@ export class EvidenceCityPlacement {
   private handlers: EvidencePlacementHandlers = {};
 
   constructor(private readonly scene: Phaser.Scene, private readonly world: () => WorldState | null,
-    private readonly terrain: () => TerrainGrid | undefined) {
+    private readonly terrain: () => TerrainGrid | undefined,
+    private readonly onVisualFocus?: (plotId?: string) => void) {
     this.graphics = scene.add.graphics().setDepth(HIGHLIGHT_DEPTH + 30);
     scene.input.on("pointerdown", this.pointerDown);
     scene.input.on("pointermove", this.pointerMove);
@@ -48,7 +49,10 @@ export class EvidenceCityPlacement {
     this.plan = plan;
     this.press = undefined;
     if (changedVariant) { this.ghost?.destroy(); this.ghost = undefined; }
-    if (!plan) { this.hovered = undefined; this.ghost?.setVisible(false); this.graphics.clear(); this.handlers.onStatus?.(null); return; }
+    if (!plan) {
+      this.hovered = undefined; this.onVisualFocus?.(); this.ghost?.setVisible(false);
+      this.graphics.clear(); this.handlers.onStatus?.(null); return;
+    }
     this.refresh();
   }
 
@@ -101,7 +105,9 @@ export class EvidenceCityPlacement {
     // A pan that returns to its starting tile is still a pan, never a build.
     if (this.press?.pointerId === pointer.id
       && Math.hypot(pointer.x - this.press.x, pointer.y - this.press.y) > CLICK_SLOP) this.press.dragged = true;
-    this.hovered = this.plotAt(pointer);
+    const hovered = this.plotAt(pointer);
+    if (hovered?.id !== this.hovered?.id) this.onVisualFocus?.(hovered?.id);
+    this.hovered = hovered;
     this.refresh();
   };
   private pointerUp = (pointer: Phaser.Input.Pointer): void => {

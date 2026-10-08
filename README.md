@@ -7,7 +7,12 @@ Jaipur infrastructure or evidence of real-world construction or planting.
 
 Public application: [grounded-peach.vercel.app](https://grounded-peach.vercel.app)
 
-Source: [anshumanbahekar/grounded](https://github.com/anshumanbahekar/grounded)
+Source: [codewithanshuman/grounded](https://github.com/codewithanshuman/grounded)
+
+> **Submission continuity note:** this is the temporary public judge mirror of
+> the verified Grounded history while access to the original maintainer account
+> is being resolved with GitHub Support. The application and commit history are
+> preserved; the live deployment remains linked above.
 
 Grounded is a probabilistic decision-support prototype, not a certified
 infrastructure-grade digital twin. Its sources, simulated assumptions,

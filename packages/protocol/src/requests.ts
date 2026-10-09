@@ -18,6 +18,7 @@ export const SweepRequest = SimulationRequest.omit({ preset: true }).extend({
 });
 export const OptimizationRequest = z.object({
   runId: z.string().min(1), riskTargetPct: z.number().finite().positive().max(100).default(5),
+  budgetCapex: z.number().finite().min(0).max(100_000_000).optional(),
 });
 
 /** Predetermined cohort size, before seeing results. At most 2,000 modeled

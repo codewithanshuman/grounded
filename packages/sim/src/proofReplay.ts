@@ -5,13 +5,14 @@ import {
   DEFAULT_INTERVENTION, LOCATIONS, MODEL_VERSION, PRESET_ORDER, analyzeInterventions, analyzeSensitivity,
   locationFromCalibration, locationWithSiteData, runMonteCarlo, toRunSummary, validateIntervention,
 } from "./index.js";
+import { optimizeInfrastructure, resolveInvestmentPlan } from "./investmentOptimizer.js";
 
 export interface ProofReplayCheck { label: string; passed: boolean; detail: string }
 export interface ProofReplayResult {
   status: "PASS" | "FAIL";
   modelVersion: string;
   checkedAt: number;
-  scope: "BASELINE_ONLY" | "FULL_OPTIMIZATION" | "REJECTED";
+  scope: "BASELINE_ONLY" | "POLICY_OPTIMIZATION_ONLY" | "FULL_OPTIMIZATION" | "REJECTED";
   statement: string;
   checks: ProofReplayCheck[];
   replayedStages: string[];
@@ -114,7 +115,8 @@ export function replayEvidence(input: unknown): ProofReplayResult {
   const result = (scope: ProofReplayResult["scope"], baselineRunId?: string, optimizedRunId?: string): ProofReplayResult => ({
     status: checks.length > 0 && checks.every((check) => check.passed) ? "PASS" : "FAIL",
     modelVersion: MODEL_VERSION, checkedAt: Date.now(), scope,
-    statement: "Deterministic replay of the embedded model evidence only. Not a source-authenticity check, field validation, or reliability guarantee. World growth and event timestamps are not model outputs and are never mutated by replay.",
+    statement: "Deterministic replay of the embedded model evidence only. Not a source-authenticity check, field validation, or reliability guarantee. World growth and event timestamps are not model outputs and are never mutated by replay."
+      + (scope === "POLICY_OPTIMIZATION_ONLY" ? " This legacy package contains operating-policy evidence only; no physical-investment result was checked." : ""),
     checks, replayedStages, baselineRunId, optimizedRunId,
   });
   try {
@@ -145,6 +147,35 @@ export function replayEvidence(input: unknown): ProofReplayResult {
         throw new Error("Historical validation is declared but its recorded climate profiles are missing; full replay cannot pass by skipping it.");
       }
       if (optimization.result.sensitivity) throw new Error("The declared optimized-result contract does not include a separately fitted sensitivity report.");
+      const investment = optimization.investmentAnalysis;
+      if (investment?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V1") {
+        throw new Error("The retained V1 investment report has no independent validation or replay plan. It remains available; rerun optimization to create a replayable V2 report.");
+      }
+      if (investment?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V2") {
+        const plan = resolveInvestmentPlan(payload.baseline.config, investment.replayPlan);
+        const planMismatch = mismatch(investment.replayPlan, plan)
+          ?? mismatch(plan.intervention, optimization.intervention)
+          ?? mismatch(plan.hazards, PRESET_ORDER);
+        if (planMismatch || investment.targetCriticalRiskPct !== payload.riskTargetPct
+          || plan.targetCriticalRiskPct !== payload.riskTargetPct) {
+          throw new Error(`Investment evidence must use the retained operating policy, planning target and normalized replay plan. ${planMismatch ?? "Target differs."}`);
+        }
+        // Include every seed consumed by selection and its diagnostics. Physical
+        // investment evidence must not reuse scenarios that chose the policy.
+        const policyClusters = Math.ceil(validation.cohorts[0].sampleSize / PRESET_ORDER.length);
+        const usedRanges = [
+          [payload.baseline.manifest!.seedOffset, payload.baseline.n],
+          [search.seedOffset, Math.ceil(search.sampleSize / PRESET_ORDER.length)],
+          [validation.cohorts[0].seedOffset, 5 * (policyClusters + 17) + policyClusters],
+          [50_000, 12 * 24],
+        ];
+        const investmentRanges = [[plan.seedOffset, plan.sampleSizePerHazard],
+          ...plan.validationSeedOffsets.map((offset) => [offset, plan.validationSampleSizePerHazard]),
+          [plan.uncertaintySeedOffset, Math.min(40, plan.sampleSizePerHazard) * plan.hazards.length]];
+        if (investmentRanges.some(([start, length]) => usedRanges.some(([other, count]) => start < other + count && other < start + length))) {
+          throw new Error("Investment scenarios overlap the retained baseline or policy selection/validation seeds. Independent investment evidence requires disjoint ranges.");
+        }
+      }
     }
     checks.push({ label: "Replay plan and model", passed: true, detail: `Schema and finite values accepted; engine ${MODEL_VERSION}, bounded samples and recorded source fingerprints.` });
   } catch (error) {
@@ -198,6 +229,12 @@ export function replayEvidence(input: unknown): ProofReplayResult {
         : "12 representative monthly climate profiles; all operational conditions are simulated" };
     compare("Historical climate replay", optimization.historicalBacktest, historicalBacktest,
       `Recomputed ${periods.length} recorded climate profiles and ${periods.length * 24} paired futures; operational conditions remain simulated.`);
+    if (optimization.investmentAnalysis?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V2") {
+      const replayedInvestment = optimizeInfrastructure(location, baseline.preset, baseline.config,
+        optimization.investmentAnalysis.replayPlan);
+      compare("Physical investment search", optimization.investmentAnalysis, replayedInvestment,
+        `Recomputed all ${optimization.investmentAnalysis.evaluatedCandidates} physical portfolios, the frozen winner, both independent holdouts and all measurement priorities from the retained plan.`);
+    }
     const relationshipError = mismatch(optimization.intervention, optimization.result.intervention)
       ?? mismatch(optimization.intervention, search.best.intervention)
       ?? mismatch({ location: baseline.location, preset: baseline.preset, config: baseline.config, n: baseline.n,
@@ -206,10 +243,10 @@ export function replayEvidence(input: unknown): ProofReplayResult {
         calibration: optimization.result.calibration, siteData: optimization.result.siteData, seedOffset: optimization.result.manifest!.seedOffset });
     checks.push({ label: "Evidence relationships", passed: relationshipError === null,
       detail: relationshipError ?? "Discovery winner, declared intervention and result policy match; baseline/result share the same config, sources, sample population and paired seeds." });
-    return result("FULL_OPTIMIZATION", baseline.runId, optimization.result.runId);
+    return result(optimization.investmentAnalysis ? "FULL_OPTIMIZATION" : "POLICY_OPTIMIZATION_ONLY", baseline.runId, optimization.result.runId);
   } catch (error) {
     checks.push({ label: "Replay execution", passed: false,
       detail: `${error instanceof Error ? error.message : "Replay failed"}. Only stages listed in replayedStages completed; remaining stages were not validated.` });
-    return result(payload.optimization ? "FULL_OPTIMIZATION" : "BASELINE_ONLY", payload.baseline.runId, payload.optimization?.result.runId);
+    return result(payload.optimization ? payload.optimization.investmentAnalysis ? "FULL_OPTIMIZATION" : "POLICY_OPTIMIZATION_ONLY" : "BASELINE_ONLY", payload.baseline.runId, payload.optimization?.result.runId);
   }
 }

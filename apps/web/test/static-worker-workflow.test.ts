@@ -5,6 +5,7 @@ import type { OptimizeResponse } from "../src/ws/client";
 import { replayLocation } from "../src/lib/runReplay";
 import { assessDecisionReadiness } from "../src/lib/decisionReadiness";
 import { assessOptimizationGrowth } from "@verdant/sim/growth";
+import { sealEvidence, verifyEvidence } from "../src/lib/evidenceStore";
 
 /** Real dispatch boundary and real simulation/search engines; only worker transport is in-process. */
 describe("Static worker complete analysis workflow", () => {
@@ -23,6 +24,7 @@ describe("Static worker complete analysis workflow", () => {
   function rejected(op: string, args: Record<string, unknown>, message: string): void {
     worker.postMessage.mockClear();
     worker.onmessage!({ data: { id: `reject-${++requestId}`, op, args } });
+    expect(worker.postMessage).toHaveBeenCalledTimes(1);
     const response = worker.postMessage.mock.lastCall![0] as { ok: boolean; error?: string };
     expect(response.ok).toBe(false);
     expect(response.error).toContain(message);
@@ -34,7 +36,7 @@ describe("Static worker complete analysis workflow", () => {
   });
   afterAll(() => vi.unstubAllGlobals());
 
-  it("initializes, loads evidence, runs, replays, optimizes twice without duplicate growth, and sweeps", () => {
+  it("runs and preserves V2 investment evidence, respects cached budget policies without duplicate growth, and sweeps", async () => {
     const initialized = dispatch<{ world: WorldState }>("init", { world: { trees: [], buildings: [], totalRuns: 0, totalFuturesSimulated: 0, bestImprovementPct: 0 } });
     expect(WorldState.parse(initialized.world).totalRuns).toBe(0);
     const profiles = dispatch<{ profiles: SiteDataProfile[] }>("profiles").profiles.map((profile) => SiteDataProfile.parse(profile));
@@ -67,6 +69,14 @@ describe("Static worker complete analysis workflow", () => {
     expect(replay.failStep).toBe(retained.failStep);
     expect(replay.criticalEnergyUnservedKWh).toBeCloseTo(retained.criticalEnergyUnservedKWh, 8);
 
+    // An invalid budget must fail at the request boundary, before looking up a
+    // run or executing a search; rejection also leaves existing evidence intact.
+    for (const budgetCapex of [-1, Infinity, -Infinity, NaN]) {
+      rejected("optimize", { runId: "missing-baseline", budgetCapex }, "budgetCapex");
+      rejected("optimize", { runId: baseline.runId, budgetCapex }, "budgetCapex");
+    }
+    expect(dispatch<{ world: WorldState }>("init").world).toEqual(simulated.world);
+
     const first = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId });
     expect(RunSummary.parse(first.result).audit?.status).toBe("PASS");
     expect(first.result.runId).not.toBe(baseline.runId);
@@ -85,6 +95,26 @@ describe("Static worker complete analysis workflow", () => {
     expect(first.validation.cohorts.every((cohort) => cohort.clusterUncertainty.clusterCount === 60)).toBe(true);
     expect(first.validation.jointStressEnvelope.evaluatedCells).toBe(81);
     expect(first.validation.decisionStability.cohorts).toHaveLength(3);
+    const investment = first.investmentAnalysis!;
+    expect(investment.model).toBe("GROUNDED_INFRASTRUCTURE_PARETO_V2");
+    expect(investment.budgetCapex).toBeNull();
+    expect(investment.evaluatedCandidates).toBe(16);
+    expect(investment.candidates).toHaveLength(investment.evaluatedCandidates);
+    expect(new Set(investment.candidates.map((candidate) => candidate.id)).size).toBe(investment.evaluatedCandidates);
+    expect(investment.frontier.length).toBeGreaterThan(0);
+    expect(investment.candidates).toContainEqual(investment.recommendation);
+    expect(investment.validation.method).toBe("FROZEN_CANDIDATE_TWO_HOLDOUTS_V1");
+    expect(investment.validation.cohorts).toHaveLength(2);
+    expect(investment.validation.cohorts.map((cohort) => cohort.seedOffset)).toEqual(investment.replayPlan.validationSeedOffsets);
+    expect(investment.validation.cohorts.every((cohort) => cohort.recommendation.id === investment.recommendation.id)).toBe(true);
+    expect(investment.uncertainty.epistemic.length).toBeGreaterThan(0);
+    expect(investment.uncertainty.epistemic).toContainEqual(investment.uncertainty.topPriority);
+    const investmentSnapshot = structuredClone(investment);
+    const sealed = await sealEvidence("guest", baseline, first, 5);
+    const restoredEvidence = await verifyEvidence(JSON.parse(JSON.stringify(sealed)), "guest");
+    // Equality of the whole report protects every portfolio, holdout cluster,
+    // cost assumption, replay parameter, and measurement priority from stripping.
+    expect(restoredEvidence.optimization?.investmentAnalysis).toEqual(investmentSnapshot);
     const planning=assessDecisionReadiness(baseline,first,5);
     expect(planning.evidenceValid).toBe(true);
     expect(assessDecisionReadiness(baseline, first, 1).withinTarget).toBe(false); // Changing the target requires rerunning the search.
@@ -102,9 +132,31 @@ describe("Static worker complete analysis workflow", () => {
     expect(repeated.result.counts).toEqual(first.result.counts);
     expect(repeated.result.manifest?.runFingerprint).toBe(first.result.manifest?.runFingerprint);
     expect(repeated.intervention).toEqual(first.intervention);
+    expect(repeated.investmentAnalysis).toEqual(investmentSnapshot);
     expect(repeated.growthEvents).toEqual([]);
+    expect(repeated.world).toEqual(first.world);
     expect(repeated.world.buildings).toEqual(first.world.buildings);
     expect(repeated.world.trees).toEqual(simulated.world.trees);
+
+    // This is the only additional uncached search: a zero budget must not
+    // reuse the unlimited report, even for exactly the same run and target.
+    const zeroBudget = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId, budgetCapex: 0 });
+    expect(zeroBudget.investmentAnalysis?.budgetCapex).toBe(0);
+    expect(zeroBudget.investmentAnalysis?.replayPlan.budgetCapex).toBe(0);
+    expect(zeroBudget.investmentAnalysis?.recommendation.capex).toBe(0);
+    expect(zeroBudget.investmentAnalysis?.recommendation.withinBudget).toBe(true);
+    expect(zeroBudget.investmentAnalysis?.candidates.some((candidate) => candidate.capex > 0 && !candidate.withinBudget)).toBe(true);
+    expect(zeroBudget.investmentAnalysis).not.toEqual(investmentSnapshot);
+    expect(zeroBudget.result.counts).toEqual(first.result.counts);
+    expect(zeroBudget.growthEvents).toEqual([]);
+    expect(zeroBudget.world).toEqual(repeated.world);
+    const zeroBudgetSnapshot = structuredClone(zeroBudget.investmentAnalysis);
+    const repeatedZeroBudget = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId, budgetCapex: 0 });
+    expect(repeatedZeroBudget.investmentAnalysis).toEqual(zeroBudgetSnapshot);
+    expect(repeatedZeroBudget.growthEvents).toEqual([]);
+    expect(repeatedZeroBudget.world).toEqual(repeated.world);
+    expect(first.investmentAnalysis).toEqual(investmentSnapshot);
+    expect(zeroBudget.investmentAnalysis).toEqual(zeroBudgetSnapshot);
 
     // Full evidence reload supplies the original baseline to the new worker;
     // restoring a rendered world alone cannot invent those source inputs.
@@ -116,6 +168,7 @@ describe("Static worker complete analysis workflow", () => {
     const afterReload = dispatch<OptimizeResponse & { world: WorldState }>("optimize", { runId: baseline.runId, riskTargetPct: 5 });
     expect(afterReload.result.counts).toEqual(first.result.counts);
     expect(afterReload.result.manifest?.runFingerprint).toBe(first.result.manifest?.runFingerprint);
+    expect(afterReload.investmentAnalysis).toEqual(investmentSnapshot);
     expect(afterReload.world).toEqual(repeated.world);
     expect(afterReload.growthEvents).toEqual([]);
     rejected("optimize", { runId: afterReload.result.runId, riskTargetPct: 5 }, "no-intervention baseline");

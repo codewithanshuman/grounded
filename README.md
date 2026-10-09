@@ -79,12 +79,14 @@ Neither readiness nor a building certifies a real facility.
 ## Physical investment search
 
 The Site Resilience Engine compares explicit solar, battery, generator and
-demand-control portfolios on identical seeded futures across all five hazards.
-It exposes reference CAPEX, tail unserved energy, critical risk, operating cost
-and operational carbon, then returns only non-dominated portfolios. The
-recommendation is the lowest-reference-CAPEX frontier candidate that meets the
-planning target, or a clearly unresolved risk-first candidate when none does.
-Reference CAPEX is a transparent assumption set, not a supplier quotation.
+demand-control portfolios on identical seed clusters across all five hazards.
+It accepts an optional reference CAPEX ceiling and exposes tail unserved energy,
+critical risk, operating cost and operational carbon. The discovered candidate
+is frozen before two disjoint target-sized holdouts. Only a portfolio whose exact
+one-sided 95% any-hazard failure bound meets the target in both holdouts without
+an introduced failure cluster is labelled supported. Every candidate, seed
+ledger, holdout and measurement priority is retained and replayable. Reference
+CAPEX is a transparent assumption set, not a supplier quotation.
 
 Only an audited completed run earns a persistent tree. A qualifying optimization
 earns a pending Evidence City milestone. The user chooses one of three designs
@@ -238,8 +240,9 @@ See [deployment](docs/DEPLOYMENT.md) and the
 ## What remains
 
 This release implements the integrity upgrade, paired measured-day sampling,
-Evidence City placement and complete proof replay. Richer generator/clinical-tier/
-EV/thermal models, cluster-bootstrap and tail/CVaR uncertainty, authenticated
+generator and clinical-tier dispatch, independently challenged infrastructure
+investment, Evidence City placement and complete proof replay. Detailed EV/
+thermal models, cluster-bootstrap and tail/CVaR confidence intervals, authenticated
 Fastify tenant isolation, job queues and external facility validation remain
 unfinished. The model does not implement AC power flow, protection coordination
 or network failure propagation. Procurement and safety decisions require local

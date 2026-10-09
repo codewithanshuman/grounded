@@ -164,8 +164,8 @@ app.post("/api/optimize", { config: { rateLimit: { max: 2, timeWindow: "1 minute
   const analysis = analyzeInterventions(location, before.preset, before.config, 300, discoverySeedOffset, PRESET_ORDER, riskTargetPct);
   const intervention = analysis.best.intervention;
   const investmentAnalysis = optimizeInfrastructure(location, before.preset, before.config, {
-    sampleSizePerHazard: 20, seedOffset: discoverySeedOffset + 100_000, hazards: PRESET_ORDER,
-    targetCriticalRiskPct: riskTargetPct, intervention,
+    sampleSizePerHazard: 100, seedOffset: discoverySeedOffset + 100_000, hazards: PRESET_ORDER,
+    targetCriticalRiskPct: riskTargetPct, intervention, budgetCapex: parsed.data.budgetCapex,
     solarOptionsKW: [0, 1_200], batteryOptionsKWh: [0, 6_000],
     generatorOptionsKW: [0, 800], demandControlOptionsPct: [0, 20],
   });

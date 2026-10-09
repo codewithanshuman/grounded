@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CONFIG, DEFAULT_INTERVENTION, LOCATIONS, seedFor, simulateScenario } from "../src/index.js";
-import { optimizeInfrastructure } from "../src/investmentOptimizer.js";
+import { applyInfrastructureInvestment, optimizeInfrastructure } from "../src/investmentOptimizer.js";
 import { analyzeValueOfInformation } from "../src/uncertainty.js";
 
 describe("Grounded 3.0 site resilience engine", () => {
@@ -43,12 +43,30 @@ describe("Grounded 3.0 site resilience engine", () => {
       sampleSizePerHazard: 20, hazards: ["extreme"], targetCriticalRiskPct: 10,
       solarOptionsKW: [0], batteryOptionsKWh: [0], generatorOptionsKW: [0, 400], demandControlOptionsPct: [0],
     });
-    expect(result.model).toBe("GROUNDED_INFRASTRUCTURE_PARETO_V1");
+    expect(result.model).toBe("GROUNDED_INFRASTRUCTURE_PARETO_V2");
     expect(result.evaluatedCandidates).toBe(2);
     expect(result.frontier.length).toBeGreaterThan(0);
     expect(result.frontier.every((candidate) => candidate.capex >= 0)).toBe(true);
     expect(result.recommendation).toBeDefined();
+    expect(result.validation.cohorts).toHaveLength(2);
+    expect(result.validation.cohorts.every((cohort) => cohort.seedOffset !== result.replayPlan.seedOffset)).toBe(true);
     expect(result.uncertainty.topPriority.recommendedMeasurement.length).toBeGreaterThan(10);
+    expect(optimizeInfrastructure(LOCATIONS.jaipur, "extreme", DEFAULT_CONFIG, result.replayPlan)).toEqual(result);
+  });
+
+  it("keeps no-build assets unchanged and applies a zero-dollar budget without inventing fuel", () => {
+    const base = { ...DEFAULT_CONFIG, generatorCapacityKW: 100, generatorFuelCapacityKWh: 240 };
+    const unchanged = applyInfrastructureInvestment(base,
+      { solarAddKW: 0, batteryAddKWh: 0, generatorAddKW: 0, demandControlPct: base.demandControlPct });
+    expect(unchanged.generatorFuelCapacityKWh).toBe(240);
+    const result = optimizeInfrastructure(LOCATIONS.jaipur, "extreme", base, {
+      sampleSizePerHazard: 20, hazards: ["extreme"], targetCriticalRiskPct: 10, budgetCapex: 0,
+      solarOptionsKW: [0], batteryOptionsKWh: [0], generatorOptionsKW: [0, 400], demandControlOptionsPct: [0],
+    });
+    expect(result.budgetCapex).toBe(0);
+    expect(result.recommendation.capex).toBe(0);
+    expect(result.recommendation.withinBudget).toBe(true);
+    expect(result.validation.cohorts).toHaveLength(2);
   });
 
   it("separates aleatoric futures from epistemic measurement priorities", () => {

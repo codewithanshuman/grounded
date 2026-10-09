@@ -4,6 +4,7 @@ import { ClimateCalibration } from "@verdant/protocol";
 import { DEFAULT_CONFIG, DEFAULT_INTERVENTION, LOCATIONS, MODEL_VERSION, PRESET_ORDER, analyzeInterventions,
   locationFromCalibration, runMonteCarlo, toRunSummary, validateIntervention } from "../src/index";
 import { replayEvidence } from "../src/proofReplay";
+import { optimizeInfrastructure } from "../src/investmentOptimizer";
 import climateCache from "../../../apps/server/climate-cache.json" with { type: "json" };
 
 function proof(): Evidence {
@@ -72,8 +73,13 @@ describe("Read-only complete model proof replay", () => {
       beforeCritical += before.counts.critical; afterCritical += after.counts.critical;
       if (after.counts.critical === 0) passedPeriods++;
     });
+    const investmentAnalysis = optimizeInfrastructure(location, baseline.preset, baseline.config, {
+      sampleSizePerHazard: 20, seedOffset: 100_000, hazards: PRESET_ORDER, targetCriticalRiskPct: 5,
+      intervention, solarOptionsKW: [0], batteryOptionsKWh: [0], generatorOptionsKW: [0, 400], demandControlOptionsPct: [0],
+    });
     const payload = StoredEvidence.parse({ ...proof(), baseline,
       optimization: { intervention, result: optimized, growthEvents: [], analysis, validation,
+        investmentAnalysis,
         historicalBacktest: { periods: periods.length, futures: periods.length * 24, beforeCritical, afterCritical, passedPeriods,
           source: calibration.source, label: calibration.historicalDays.length
             ? "12 highest-stress observed NASA POWER climate days from 2023; outage and demand remain simulated"
@@ -82,11 +88,21 @@ describe("Read-only complete model proof replay", () => {
     const replayed = replayEvidence(payload);
     expect(replayed.status, JSON.stringify(replayed.checks)).toBe("PASS");
     expect(replayed.scope).toBe("FULL_OPTIMIZATION");
-    expect(replayed.replayedStages).toEqual(["Baseline run", "Optimized run", "Discovery search", "Independent validation", "Historical climate replay"]);
+    expect(replayed.replayedStages).toEqual(["Baseline run", "Optimized run", "Discovery search", "Independent validation", "Historical climate replay", "Physical investment search"]);
     expect(replayed.checks.every((check) => check.passed)).toBe(true);
     expect(JSON.stringify(payload)).toBe(original);
     // Replay PASS means reproducible, never that a small unresolved cohort
     // suddenly constitutes a certified policy or earns a building.
     expect(payload.optimization!.validation.cohorts.every((cohort) => !cohort.targetMet)).toBe(true);
+    const altered = structuredClone(payload);
+    if (altered.optimization?.investmentAnalysis?.model !== "GROUNDED_INFRASTRUCTURE_PARETO_V2") throw new Error("Missing investment fixture");
+    altered.optimization.investmentAnalysis.recommendation.capex += 1;
+    const tampered = replayEvidence(altered);
+    expect(tampered.status).toBe("FAIL");
+    expect(tampered.checks.find((check) => check.label === "Physical investment search")).toMatchObject({ passed: false });
+    altered.optimization.investmentAnalysis.replayPlan.intervention.reservePct += 1;
+    expect(replayEvidence(altered)).toMatchObject({ status: "FAIL", scope: "REJECTED", replayedStages: [] });
+    altered.optimization.investmentAnalysis = { model: "GROUNDED_INFRASTRUCTURE_PARETO_V1" };
+    expect(replayEvidence(altered)).toMatchObject({ status: "FAIL", scope: "REJECTED", replayedStages: [] });
   }, 180_000);
 });

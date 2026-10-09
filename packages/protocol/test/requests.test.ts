@@ -13,7 +13,9 @@ describe("Shared compute contract", () => {
   });
   it("requires a finite positive planning target", () => {
     expect(OptimizationRequest.parse({ runId: "run" }).riskTargetPct).toBe(5);
+    expect(OptimizationRequest.parse({ runId: "run", budgetCapex: 0 }).budgetCapex).toBe(0);
     for (const riskTargetPct of [0, -1, 101, NaN]) expect(OptimizationRequest.safeParse({ runId: "run", riskTargetPct }).success).toBe(false);
+    for (const budgetCapex of [-1, 100_000_001, Infinity]) expect(OptimizationRequest.safeParse({ runId: "run", budgetCapex }).success).toBe(false);
   });
   it("predeclares independent cluster sample size without inspecting results", () => {
     expect(validationCohortSize(5, 5)).toBe(300);

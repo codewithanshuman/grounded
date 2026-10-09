@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ClimateCalibration, SiteDataProfile, ServerMessage, WorldState as WorldStateSchema, GrowthEvent as GrowthEventSchema, type ClimateSweepResult, type GrowthEvent, type Intervention, type LocationId, type MicrogridConfig, type PresetId, type RunSummary, type WorldState } from "@verdant/protocol";
 import type { OptimizationSearch, OptimizerValidation } from "@verdant/sim";
-import type { InvestmentOptimization } from "@verdant/sim/investmentOptimizer";
+import type { InvestmentEvidence } from "@verdant/protocol/evidence";
 import { persistCloudWorld } from "../auth/cloudIdentity";
 import { worldStorageKey, type IdentityProfile } from "../auth/localIdentity";
 import { isAnalysisOperation } from "./engineRequest";
@@ -31,7 +31,7 @@ export interface OptimizeResponse {
   growthEvents: GrowthEvent[];
   analysis: OptimizationSearch;
   validation: OptimizerValidation;
-  investmentAnalysis?: InvestmentOptimization;
+  investmentAnalysis?: InvestmentEvidence;
   historicalBacktest: {
     periods: number;
     futures: number;
@@ -250,12 +250,12 @@ export function useVerdant(identity?: IdentityProfile | null) {
     [callStatic],
   );
 
-  const optimize = useCallback(async (runId: string, riskTargetPct: number): Promise<OptimizeResponse> => {
-    if (STATIC_MODE) return callStatic<OptimizeResponse>("optimize", { runId, riskTargetPct });
+  const optimize = useCallback(async (runId: string, riskTargetPct: number, budgetCapex?: number): Promise<OptimizeResponse> => {
+    if (STATIC_MODE) return callStatic<OptimizeResponse>("optimize", { runId, riskTargetPct, budgetCapex });
     const res = await fetch(`${API_BASE}/api/optimize`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ runId, riskTargetPct }),
+      body: JSON.stringify({ runId, riskTargetPct, budgetCapex }),
     });
     if (!res.ok) throw new Error(`optimize failed: ${res.status}`);
     return (await res.json()) as OptimizeResponse;

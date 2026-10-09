@@ -128,9 +128,10 @@ remain outside this release.
 ### 8. Complete proof replay
 
 A separate browser worker can recompute a retained baseline or complete
-optimization package, including discovery, independent holdouts, shocks, the
-81-cell stress envelope, shortlist stability and dated climate replay where
-present. It compares scientific fields and sampling provenance within the
+optimization package, including policy discovery, independent holdouts, shocks,
+the 81-cell stress envelope, shortlist stability, dated climate replay, every
+physical portfolio, the frozen portfolio's holdouts and measurement priorities.
+It compares scientific fields and sampling provenance within the
 declared numerical tolerance; only transport run IDs/timestamps are ignored.
 Input/schema/model/source consistency is checked before replay, and cancellation
 terminates the worker. A pass shows deterministic agreement with the recorded
@@ -157,15 +158,25 @@ The method is labelled `CONDITIONAL_DEPENDENCY_V1`: it is transparent and
 deterministic, but it is not a fitted joint multivariate model and does not
 create seasonal or rare-event coverage absent from the source history.
 
-### 11. Physical investment Pareto search
+### 11. Independently challenged physical investment search
 
-The optimizer now compares solar, battery, generator and demand-control
-portfolios on identical seeded futures across the requested hazards. It reports
-reference CAPEX, critical risk, CVaR95 unserved energy, operating cost, carbon
-and generator use, filters dominated portfolios and selects the least-reference-
-CAPEX feasible frontier candidate. If no portfolio meets the target, it returns
-an explicitly unresolved risk-first candidate. CAPEX coefficients are disclosed
-planning assumptions, not procurement quotes.
+The optimizer compares solar, battery, generator and demand-control portfolios
+on identical seed clusters across the requested hazards. Users can declare a
+reference CAPEX ceiling. Selection uses the one-sided exact 95% upper bound on
+whether any hazard fails in a seed cluster, plus cost, tail loss, operating cost
+and carbon. The selected portfolio is frozen before two disjoint target-sized
+holdouts. A report is `SUPPORTED` only when both holdout bounds meet the target
+and neither introduces a failure cluster. Very tight targets remain unresolved
+when the predetermined cohort reaches its 2,000-seed cap, even with zero observed
+failures.
+
+Complete candidates, frontier, integer seed ledgers, cost assumptions, holdouts,
+paired transitions and uncertainty priorities are retained. Proof replay binds
+them to the saved operating policy, target, five-hazard set and disjoint seed
+ranges. V1 investment reports remain readable but cannot pass complete V2 replay.
+No-build portfolios preserve existing generator fuel rather than receiving free
+fuel, and demand-control CAPEX charges only the increment above existing control.
+CAPEX coefficients remain planning assumptions, not procurement quotes.
 
 ### 12. Aleatoric/epistemic uncertainty and information priority
 

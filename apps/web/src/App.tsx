@@ -94,6 +94,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<ViewId>("overview");
   const [runElapsed, setRunElapsed] = useState(0);
   const [riskTargetPct, setRiskTargetPct] = useState(5);
+  const [budgetCapex, setBudgetCapex] = useState<number | undefined>();
   const [matrixInputKey, setMatrixInputKey] = useState<string | null>(null);
   const gateRef = useRef(new AnalysisGate());
   const inputs = { locationId, preset, config, scenarioCount, siteDataProfileId };
@@ -101,7 +102,7 @@ export default function App() {
   const selectedProfile = siteDataProfiles.find((profile) => profile.id === siteDataProfileId);
   const sweepKey = analysisInputKey({ ...inputs, preset: "normal", scenarioCount: 500 }) + (selectedProfile?.fingerprint ?? "");
   const requestContextRef = useRef("");
-  requestContextRef.current = `${identity?.id ?? "guest"}:${inputsKey}:${selectedProfile?.fingerprint ?? ""}:${riskTargetPct}`;
+  requestContextRef.current = `${identity?.id ?? "guest"}:${inputsKey}:${selectedProfile?.fingerprint ?? ""}:${riskTargetPct}:${budgetCapex ?? "unlimited"}`;
   const configIssues = inputIssues(inputs);
   const inputChanges = baseline ? changedRunInputs(baseline, inputs) : [];
   if (baseline?.siteData?.id === selectedProfile?.id && baseline?.siteData?.fingerprint !== selectedProfile?.fingerprint) inputChanges.push("data revision");
@@ -185,7 +186,7 @@ export default function App() {
     setIsOptimizing(true);
     setOperationError(null);
     try {
-      const result = await optimize(baseline.runId, riskTargetPct);
+      const result = await optimize(baseline.runId, riskTargetPct, budgetCapex);
       if (!gateRef.current.accepts(ticket, requestContextRef.current)) return;
       setOptimized(result);
       await persistEvidence(baseline, result, riskTargetPct);
@@ -196,7 +197,7 @@ export default function App() {
     } finally {
       if (gateRef.current.finish(ticket)) setIsOptimizing(false);
     }
-  }, [optimize, persistEvidence, riskTargetPct, baseline, baselineIsCurrent, isRunning, connected]);
+  }, [optimize, persistEvidence, riskTargetPct, budgetCapex, baseline, baselineIsCurrent, isRunning, connected]);
 
   const runAllHazards = useCallback(async () => {
     if (!connected || isRunning || configIssues.length || !dataReady) return;
@@ -275,6 +276,8 @@ export default function App() {
     setScenarioCount(recorded.scenarioCount);
     setSiteDataProfileId(recorded.siteDataProfileId);
     setRiskTargetPct(restoredEvidence.riskTargetPct);
+    const investment = restoredEvidence.optimization?.investmentAnalysis;
+    setBudgetCapex(investment?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V2" ? investment.budgetCapex ?? undefined : undefined);
     setSelectedFailureSeed(restoredEvidence.baseline.failures[0]?.seed ?? null);
   }, [restoredEvidence]);
 
@@ -471,7 +474,7 @@ export default function App() {
 
           {activeView === "overview" && (
             <>
-            <DecisionWorkspace baseline={baseline} optimized={optimized} stale={!!baseline && !baselineIsCurrent} busy={cannotRun} targetPct={riskTargetPct} onTargetChange={setRiskTargetPct} onRun={runSimulation} onRisk={() => setActiveView("risk")} onStrategy={() => setActiveView("optimizer")} onProof={() => setActiveView("compare")} onMethod={() => setActiveView("method")} />
+            <DecisionWorkspace baseline={baseline} optimized={optimized} stale={!!baseline && !baselineIsCurrent} busy={cannotRun} targetPct={riskTargetPct} onTargetChange={(value) => { setRiskTargetPct(value); setOptimized(null); }} onRun={runSimulation} onRisk={() => setActiveView("risk")} onStrategy={() => setActiveView("optimizer")} onProof={() => setActiveView("compare")} onMethod={() => setActiveView("method")} />
             <div className="overview-grid">
               <section className="world-card">
                 <div className="card-heading"><div><h3>{identity?.worldName ?? "Jaipur resilience district"}</h3></div></div>
@@ -505,7 +508,7 @@ export default function App() {
           <WorkspaceBoundary key={activeView}><Suspense fallback={<WorkspaceFallback />}>
             {activeView === "matrix" && climateSweep && <section className="analysis-card"><div className="analysis-heading"><div><small>MULTI-HAZARD VALIDATION</small><h3>Climate resilience matrix</h3></div><p>Five climate regimes. Identical seeds. One honest worst-case score.</p></div><div className="panel-surface analysis-body"><ClimateMatrixPanel sweep={climateSweep} /></div></section>}
             {activeView === "risk" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>FAILURE FORENSICS</small><h3>Where the system breaks</h3></div><button className="next-step" onClick={() => setActiveView("optimizer")}>Find a resilient strategy →</button></div><div className="panel-surface analysis-body"><RiskPanel baseline={baseline} selectedFailureSeed={selectedFailureSeed} setSelectedFailureSeed={setSelectedFailureSeed} /></div></section>}
-            {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>245 strategies searched across five hazards, then validated on three disjoint holdouts and four assumption shocks.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} disabled={isRunning || !baselineIsCurrent || !connected} runOptimizer={runOptimizer} /></div></section>}
+            {activeView === "optimizer" && baseline && <section className="analysis-card"><div className="analysis-heading"><div><small>DECISION INTELLIGENCE</small><h3>Smallest effective intervention</h3></div><p>Compare operating policies and infrastructure investments, then check their performance on independent scenarios.</p></div><div className="panel-surface analysis-body"><OptimizerPanel baseline={baseline} optimized={optimized} isOptimizing={isOptimizing} disabled={isRunning || !baselineIsCurrent || !connected} runOptimizer={runOptimizer} budgetCapex={budgetCapex} onBudgetChange={(value) => { setBudgetCapex(value); setOptimized(null); }} /></div></section>}
             {activeView === "compare" && baseline && optimized && <section className="analysis-card"><div className="analysis-heading"><div><small>COUNTERFACTUAL PROOF</small><h3>Same future. Two strategies.</h3></div><p>Only the intervention changes between these two calibrated worlds.</p></div><div className="panel-surface analysis-body"><ComparePanel baseline={baseline} optimized={optimized} /></div></section>}
             {activeView === "method" && <section className="analysis-card"><div className="analysis-heading"><div><small>SCIENTIFIC TRANSPARENCY</small><h3>Evidence &amp; methodology</h3></div><p>Sources, uncertainty, validation design and model boundaries—open for inspection.</p></div><div className="panel-surface analysis-body"><MethodologyPanel calibration={baseline ? baseline.calibration ?? null : calibration} siteData={baseline ? baseline.siteData ?? null : activeSiteData} locationLabel={LOCATIONS[baseline?.location ?? locationId].label} latestRun={optimized?.result ?? baseline} onCommission={handleCommission} commissioningAvailable={executionMode === "Server engine"} /></div></section>}
           </Suspense></WorkspaceBoundary>

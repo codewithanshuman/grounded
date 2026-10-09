@@ -230,8 +230,9 @@ export function RiskPanel({ baseline, selectedFailureSeed, setSelectedFailureSee
 }
 
 /* --------------------------------- Optimizer -------------------------------- */
-export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer, disabled = false }: {
+export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer, disabled = false, budgetCapex, onBudgetChange }: {
   baseline: RunSummary; optimized: OptimizeResponse | null; isOptimizing: boolean; runOptimizer: () => void; disabled?: boolean;
+  budgetCapex?: number; onBudgetChange?: (value: number | undefined) => void;
 }) {
   const improvementPct = optimized && baseline.counts.critical > 0
     ? Math.round((1 - optimized.result.counts.critical / baseline.counts.critical) * 100)
@@ -240,6 +241,7 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
   return (
     <div className="w-[560px]">
       <p className="text-[11px] text-slate-500 mb-2">Tests all 245 policies in an independent 300-evaluation discovery cohort. Among candidates whose conservative seed-cluster bound meets your planning target, select minimal disruption, then cost/carbon. If none qualifies, return an unresolved risk-first fallback. The chosen policy is then challenged on unseen evidence, including the original {baseline.n.toLocaleString()} baseline futures.</p>
+      <label className="investment-budget"><span>Reference CAPEX ceiling <small>optional · USD 2026 assumptions</small></span><input aria-label="Reference CAPEX ceiling" type="number" min={0} max={100000000} step={10000} placeholder="No ceiling" value={budgetCapex ?? ""} disabled={disabled || isOptimizing} onChange={(event) => { const value = event.currentTarget.value; onBudgetChange?.(value === "" ? undefined : Math.max(0, Math.min(100_000_000, Number(value)))); }} /></label>
       <button
         onClick={runOptimizer}
         disabled={disabled || isOptimizing}
@@ -263,26 +265,33 @@ export function OptimizerPanel({ baseline, optimized, isOptimizing, runOptimizer
             <StatBlock label="EV delay" value={`${optimized.intervention.evDelayMin}m`} color="#38bdf8" />
             <StatBlock label="Precool" value={optimized.intervention.precoolHour != null ? fmtHour(optimized.intervention.precoolHour) : "off"} color="#fbbf24" />
           </div>
-          {optimized.investmentAnalysis && (() => {
-            const investment = optimized.investmentAnalysis.recommendation;
+          {optimized.investmentAnalysis?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V2" && (() => {
+            const report = optimized.investmentAnalysis;
+            const investment = report.recommendation;
+            const statusLabel = report.status === "SUPPORTED" ? "SUPPORTED ON HOLDOUTS" : report.status === "BUDGET_INFEASIBLE" ? "NO AFFORDABLE PLAN" : "EVIDENCE UNRESOLVED";
             return <section className="investment-decision">
-              <div className="investment-decision-heading"><div><small>SITE RESILIENCE ENGINE · PHYSICAL INVESTMENT</small><strong>Lowest-capital model candidate on the infrastructure Pareto frontier</strong></div><span>{investment.feasible ? "TARGET MET" : "TARGET UNRESOLVED"}</span></div>
+              <div className="investment-decision-heading"><div><small>SITE RESILIENCE ENGINE · PHYSICAL INVESTMENT</small><strong>Frozen portfolio tested on independent futures</strong></div><span className={report.status.toLowerCase()}>{statusLabel}</span></div>
               <div className="investment-decision-grid">
                 <span><small>SOLAR</small><b>+{investment.investment.solarAddKW.toLocaleString()} kW</b></span>
                 <span><small>BATTERY</small><b>+{investment.investment.batteryAddKWh.toLocaleString()} kWh</b></span>
                 <span><small>GENERATOR</small><b>+{investment.investment.generatorAddKW.toLocaleString()} kW</b></span>
                 <span><small>DEMAND CONTROL</small><b>{investment.investment.demandControlPct}%</b></span>
                 <span><small>REFERENCE CAPEX</small><b>${investment.capex.toLocaleString()}</b></span>
-                <span><small>WORST HAZARD RISK</small><b>{investment.worstCriticalRiskPct.toFixed(1)}%</b></span>
+                <span><small>DISCOVERY UPPER 95%</small><b>{investment.clusterUncertainty.upperCriticalRiskPct.toFixed(1)}%</b></span>
               </div>
-              <p>{optimized.investmentAnalysis.evaluatedCandidates} infrastructure portfolios × {optimized.investmentAnalysis.hazards.length} hazards on identical seeds. {optimized.investmentAnalysis.disclosure}</p>
+              <p className="investment-selection">{report.selectionReason}</p>
+              <div className="investment-holdouts">{report.validation.cohorts.map((cohort) => <article className={cohort.targetMet && cohort.nonRegression ? "passed" : "review"} key={cohort.label}><div><small>{cohort.label} · {cohort.sampleSizePerHazard} SHARED SEEDS</small><strong>{cohort.targetMet && cohort.nonRegression ? "Target supported" : "Unresolved"}</strong></div><b>{cohort.recommendation.clusterUncertainty.upperCriticalRiskPct.toFixed(2)}% <small>upper 95% any-hazard risk</small></b><p>{cohort.preventedFailureClusters} failure clusters prevented · {cohort.introducedFailureClusters} introduced · paired p {cohort.pairedClusterPValue < .001 ? "<0.001" : cohort.pairedClusterPValue.toFixed(3)}</p></article>)}</div>
+              <details className="investment-frontier"><summary>Inspect {report.frontier.length} non-dominated portfolios</summary><div><span>Portfolio</span><span>CAPEX</span><span>Upper 95%</span><span>Tail loss</span></div>{report.frontier.map((candidate) => <div className={candidate.id === investment.id ? "recommended" : ""} key={candidate.id}><span>{candidate.id === investment.id ? "★ " : ""}+{candidate.investment.solarAddKW}S / +{candidate.investment.batteryAddKWh}B / +{candidate.investment.generatorAddKW}G / {candidate.investment.demandControlPct}% control</span><b>${candidate.capex.toLocaleString()}</b><b>{candidate.clusterUncertainty.upperCriticalRiskPct.toFixed(1)}%</b><b>{candidate.meanCvar95UnservedKWh.toFixed(0)} kWh</b></div>)}</details>
               <div className="uncertainty-separation">
-                <span><small>ALEATORIC</small><strong>Seeded futures</strong><p>{optimized.investmentAnalysis.uncertainty.aleatoric.sources.join(" · ")}</p></span>
-                <span><small>EPISTEMIC · MEASURE NEXT</small><strong>{optimized.investmentAnalysis.uncertainty.topPriority.label}</strong><p>{optimized.investmentAnalysis.uncertainty.topPriority.recommendedMeasurement}</p></span>
-                <span><small>DECISION RANGE</small><strong>{optimized.investmentAnalysis.uncertainty.topPriority.criticalRiskRangePct.toFixed(1)} risk pts</strong><p>{optimized.investmentAnalysis.uncertainty.topPriority.cvar95RangeKWh.toFixed(0)} kWh CVaR95 spread</p></span>
+                <span><small>ALEATORIC</small><strong>Seeded futures</strong><p>{report.uncertainty.aleatoric.sources.join(" · ")}</p></span>
+                <span><small>EPISTEMIC · MEASURE NEXT</small><strong>{report.uncertainty.topPriority.label}</strong><p>{report.uncertainty.topPriority.recommendedMeasurement}</p></span>
+                <span><small>DECISION RANGE</small><strong>{report.uncertainty.topPriority.criticalRiskRangePct.toFixed(1)} risk pts</strong><p>{report.uncertainty.topPriority.cvar95RangeKWh.toFixed(0)} kWh CVaR95 spread</p></span>
               </div>
+              <details className="measurement-register"><summary>All measurement priorities</summary>{report.uncertainty.epistemic.map((item, index) => <div key={item.id}><b>{index + 1}</b><span><strong>{item.label}</strong><small>{item.lowAssumption} → {item.highAssumption}</small><p>{item.recommendedMeasurement}</p></span><em>{item.decisionValueScore.toFixed(1)}</em></div>)}</details>
+              <p>{report.evaluatedCandidates} portfolios × {report.hazards.length} hazards on identical discovery seeds; the selected portfolio was frozen before {report.validation.cohorts.length} disjoint holdouts. {report.disclosure}</p>
             </section>;
           })()}
+          {optimized.investmentAnalysis?.model === "GROUNDED_INFRASTRUCTURE_PARETO_V1" && <section className="investment-decision legacy-investment"><div className="investment-decision-heading"><div><small>LEGACY PHYSICAL INVESTMENT REPORT</small><strong>Discovery result retained for historical inspection</strong></div><span className="unresolved">RERUN REQUIRED</span></div><p>This earlier report did not freeze its candidate before independent holdouts and contains no complete replay plan. Run the current optimizer to create V2 investment evidence.</p></section>}
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <h4 className="text-[9px] tracking-wider text-slate-500 uppercase mb-1">Before</h4>
